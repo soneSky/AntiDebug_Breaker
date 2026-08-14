@@ -15,6 +15,8 @@
 
     const SCRIPT_ID = 'hook_xhr_setRequestHeader';
 
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
+
     function clear_Antidebug(id) {
         localStorage.removeItem("Antidebug_breaker_" + id + "_flag");
         localStorage.removeItem("Antidebug_breaker_" + id + "_param");
@@ -32,26 +34,29 @@
 
         XMLHttpRequest.prototype.setRequestHeader = function () {
             if (flag === "0") {
-                console.log(
-                    "请求头设置：\n" +
-                    arguments[0] + ": " + arguments[1]
-                )
+                if (arguments[1] && typeof arguments[1] === "object") {
+                    console.log("请求头设置：\n" + arguments[0] + ": " + JSON.stringify(arguments[1]));
+                } else {
+                    console.log("%c请求头设置：\n" + arguments[0] + ": " + arguments[1], sone_color);
+                }
                 if (is_debugger === "1") {
                     debugger;
                 }
                 if (is_stack === "1") {
-                    console.log(new Error().stack);
+                    console.log("%c" + new Error().stack, sone_color);
                 }
             } else {
                 if (arguments[0] && param.some(item => arguments[0].includes(item))) {
-                    console.log(
-                        "捕获到设置请求头 ---> " + arguments[0] + "\n" + arguments[0] + ": " + arguments[1]
-                    )
+                    if (arguments[1] && typeof arguments[1] === "object") {
+                        console.log("捕获到设置请求头 ---> " + arguments[0] + "\n" + arguments[0] + ": " + JSON.stringify(arguments[1]));
+                    } else {
+                        console.log("%c捕获到设置请求头 ---> " + arguments[0] + "\n" + arguments[0] + ": " + arguments[1], sone_color);
+                    }
                     if (is_debugger === "1") {
                         debugger;
                     }
                     if (is_stack === "1") {
-                        console.log(new Error().stack);
+                        console.log("%c" + new Error().stack, sone_color);
                     }
                 }
             }

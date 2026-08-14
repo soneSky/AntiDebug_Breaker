@@ -14,6 +14,8 @@
 
     const SCRIPT_ID = 'hook_sessionStorage_clear';
 
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
+
     function clear_Antidebug(id) {
         localStorage.removeItem("Antidebug_breaker_" + id + "_flag");
         localStorage.removeItem("Antidebug_breaker_" + id + "_debugger");
@@ -29,12 +31,12 @@
 
         sessionStorage.clear = function () {
             if (flag === "0") {
-                console.log("捕获到移除了sessionStorage中的所有键值对");
+                console.log("%c捕获到移除了sessionStorage中的所有键值对", sone_color);
                 if (is_debugger === "1") {
                     debugger;
                 }
                 if (is_stack === "1") {
-                    console.log(new Error().stack);
+                    console.log("%c" + new Error().stack, sone_color);
                 }
             }
             return temp_sessionStorage_clear.call(this, ...arguments);

@@ -29,15 +29,19 @@
 
         window.fetch = function () {
             if (flag === "0") {
-                console.log("捕获到fetch请求：\n");
+                console.log("%c捕获到fetch请求：\n", sone_color);
                 for (let i = 0; i < arguments.length; i++) {
-                    console.log(arguments[i]);
+                    if (arguments[i] && typeof arguments[i] === "object") {
+                        console.log(JSON.stringify(arguments[i]));
+                    } else {
+                        console.log("%c%s", sone_color, arguments[i]);
+                    }
                 }
                 if (is_debugger === "1") {
                     debugger;
                 }
                 if (is_stack === "1") {
-                    console.log(new Error().stack);
+                    console.log("%c" + new Error().stack, sone_color);
                 }
             }
             return temp_fetch(...arguments);

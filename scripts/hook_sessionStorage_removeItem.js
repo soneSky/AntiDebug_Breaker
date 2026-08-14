@@ -31,21 +31,21 @@
 
         sessionStorage.removeItem = function () {
             if (flag === "0") {
-                console.log("移除了sessionStorage键\n键名 ---> " + arguments[0]);
+                console.log("%c移除了sessionStorage键\n键名 ---> %s", sone_color, arguments[0]);
                 if (is_debugger === "1") {
                     debugger;
                 }
                 if (is_stack === "1") {
-                    console.log(new Error().stack);
+                    console.log("%c" + new Error().stack, sone_color);
                 }
             } else {
                 if (arguments[0] && param.some(item => arguments[0].includes(item))) {
-                    console.log(`捕获到移除了sessionStorage键 ---> ${arguments[0]}`);
+                    console.log("%c捕获到移除了sessionStorage键 ---> %s", sone_color, arguments[0]);
                     if (is_debugger === "1") {
                         debugger;
                     }
                     if (is_stack === "1") {
-                        console.log(new Error().stack);
+                        console.log("%c" + new Error().stack, sone_color);
                     }
                 }
             }

@@ -12,6 +12,8 @@
 (function () {
     'use strict';
 
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
+
     let SCRIPT_ID = 'Hook_cookie';
 
     function clear_Antidebug(id) {
@@ -63,22 +65,22 @@
             },
             set: function (cookie) {
                 if (flag === "0") {
-                    console.log("设置cookie：\n", cookie);
+                    console.log("%c设置cookie：\n%s", sone_color, cookie);
                     if (is_debugger === "1") {
                         debugger;
                     }
                     if (is_stack === "1") {
-                        console.log(new Error().stack);
+                        console.log("%c" + new Error().stack, sone_color);
                     }
                 } else {
                     let cookie_key = parseCookieNames(cookie);
                     if (cookie_key && cookie_key.length !== 0 && param.some(item => cookie_key[0].includes(item))) {
-                        console.log(`捕获到设置cookie ---> ${cookie_key[0]}\n值：${cookie}`);
+                        console.log("%c捕获到设置cookie ---> " + cookie_key[0] + "\n值：" + cookie, sone_color);
                         if (is_debugger === "1") {
                             debugger;
                         }
                         if (is_stack === "1") {
-                            console.log(new Error().stack);
+                            console.log("%c" + new Error().stack, sone_color);
                         }
                     }
                 }

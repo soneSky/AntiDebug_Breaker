@@ -31,7 +31,7 @@
                 debugger;
             }
             if (is_stack === "1") {
-                console.log(new Error().stack);
+                console.log("%c" + new Error().stack, sone_color);
             }
             return date_value;
         }

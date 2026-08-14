@@ -11,12 +11,17 @@
 
 (function () {
     'use strict';
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
     const readonlyProps = ['log', 'trace', 'groupCollapsed', 'groupEnd'];
     // 代理console对象，实现只读属性，防止方法被重写
     const readonlyConsole = new Proxy(console, {
         set(t, k, v, r) {
             if (readonlyProps.includes(k)) {
-                console.groupCollapsed(`%c有代码试图重写console.${k}方法，已阻止`,"color: #ff6348;", v);
+                if (v && typeof v === "object") {
+                    console.groupCollapsed(`有代码试图重写console.${k}方法，已阻止`);
+                } else {
+                    console.groupCollapsed(`%c有代码试图重写console.${k}方法，已阻止%s`, sone_color, v);
+                }
                 console.trace(); // hidden in collapsed group
                 console.groupEnd();
                 return true;
@@ -35,7 +40,11 @@
             return readonlyConsole;
         },
         set: function (v) {
-            console.groupCollapsed("%c有代码试图重写console，已阻止", "color: #ff6348;", v);
+            if (v && typeof v === "object") {
+                console.groupCollapsed("有代码试图重写console，已阻止");
+            } else {
+                console.groupCollapsed("%c有代码试图重写console，已阻止%s", sone_color, v);
+            }
             console.trace(); // hidden in collapsed group
             console.groupEnd();
         }

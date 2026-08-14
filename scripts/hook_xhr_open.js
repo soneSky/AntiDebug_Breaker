@@ -15,6 +15,8 @@
 
     const SCRIPT_ID = 'hook_xhr_open';
 
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
+
     function clear_Antidebug(id) {
         localStorage.removeItem("Antidebug_breaker_" + id + "_flag");
         localStorage.removeItem("Antidebug_breaker_" + id + "_param");
@@ -32,21 +34,21 @@
 
         XMLHttpRequest.prototype.open = function () {
             if (flag === "0") {
-                console.log("初始化xhr请求：method ---> %s, url ---> %s", arguments[0], arguments[1]);
+                console.log("%c初始化xhr请求：method ---> %s, url ---> %s", sone_color, arguments[0], arguments[1]);
                 if (is_debugger === "1") {
                     debugger;
                 }
                 if (is_stack === "1") {
-                    console.log(new Error().stack);
+                    console.log("%c" + new Error().stack, sone_color);
                 }
             } else {
                 if (arguments[1] && param.some(item => arguments[1].includes(item))) {
-                    console.log("捕获到初始化xhr请求设置 url ---> %s method ---> %s", arguments[1], arguments[0]);
+                    console.log("%c捕获到初始化xhr请求设置 url ---> %s method ---> %s", sone_color, arguments[1], arguments[0]);
                     if (is_debugger === "1") {
                         debugger;
                     }
                     if (is_stack === "1") {
-                        console.log(new Error().stack);
+                        console.log("%c" + new Error().stack, sone_color);
                     }
                 }
             }

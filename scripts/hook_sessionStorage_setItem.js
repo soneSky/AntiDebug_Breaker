@@ -14,6 +14,8 @@
 
     const SCRIPT_ID = 'hook_sessionStorage_setItem';
 
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
+
     function clear_Antidebug(id) {
         localStorage.removeItem("Antidebug_breaker_" + id + "_flag");
         localStorage.removeItem("Antidebug_breaker_" + id + "_param");
@@ -31,21 +33,29 @@
 
         sessionStorage.setItem = function () {
             if (flag === "0") {
-                console.log(`设置了sessionStorage，键值对为：\n${arguments[0]}:${arguments[1]}`);
+                if (arguments[1] && typeof arguments[1] === "object") {
+                    console.log("设置了sessionStorage，键值对为：\n" + arguments[0] + ":" + JSON.stringify(arguments[1]));
+                } else {
+                    console.log("%c设置了sessionStorage，键值对为：\n%s:%s", sone_color, arguments[0], arguments[1]);
+                }
                 if (is_debugger === "1") {
                     debugger;
                 }
                 if (is_stack === "1") {
-                    console.log(new Error().stack);
+                    console.log("%c" + new Error().stack, sone_color);
                 }
             } else {
                 if (arguments[0] && param.some(item => arguments[0].includes(item))) {
-                    console.log(`捕获到设置了sessionStorage\n键 ---> ${arguments[0]} 值 ---> ${arguments[1]}`);
+                    if (arguments[1] && typeof arguments[1] === "object") {
+                        console.log("捕获到设置了sessionStorage\n键 ---> " + arguments[0] + " 值 ---> " + JSON.stringify(arguments[1]));
+                    } else {
+                        console.log("%c捕获到设置了sessionStorage\n键 ---> %s 值 ---> %s", sone_color, arguments[0], arguments[1]);
+                    }
                     if (is_debugger === "1") {
                         debugger;
                     }
                     if (is_stack === "1") {
-                        console.log(new Error().stack);
+                        console.log("%c" + new Error().stack, sone_color);
                     }
                 }
             }

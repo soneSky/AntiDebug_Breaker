@@ -12,10 +12,11 @@
 
 // Vue实例和Router获取函数（DOM监控版 - 适用于油猴脚本）
 (function() {
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
     // 更强的全局执行锁
     const LOCK_KEY = '__VUE_GETTER_RUNNING__';
     if (window[LOCK_KEY]) {
-        console.warn('⚠️ Vue获取脚本已在运行中，跳过本次执行');
+        console.warn("%c⚠️ Vue获取脚本已在运行中，跳过本次执行", sone_color);
         return;
     }
 
@@ -28,7 +29,7 @@
         });
     } catch (e) {
         // 如果无法设置，说明已经在运行
-        console.warn('⚠️ 无法设置执行锁，脚本可能已在运行');
+        console.warn("%c⚠️ 无法设置执行锁，脚本可能已在运行", sone_color);
         return;
     }
 
@@ -48,8 +49,8 @@ function sendToExtension(data) {
     } catch (error) {
         // ✅ 捕获 DataCloneError
         if (error.name === 'DataCloneError' || error.message.includes('could not be cloned')) {
-            console.error('[AntiDebug] 路由数据包含不可序列化的对象（如Symbol），无法传递给插件');
-            console.error('[AntiDebug] 请查看控制台输出的路由列表');
+            console.error("%c[AntiDebug] 路由数据包含不可序列化的对象（如Symbol），无法传递给插件", sone_color);
+            console.error("%c[AntiDebug] 请查看控制台输出的路由列表", sone_color);
             
             // 发送错误消息给插件
             try {
@@ -63,17 +64,17 @@ function sendToExtension(data) {
                     }
                 }, '*');
             } catch (e) {
-                console.error('[AntiDebug] 发送错误消息也失败:', e);
+                console.error("%c[AntiDebug] 发送错误消息也失败: %s", sone_color, e);
             }
         } else {
-            console.error('[AntiDebug] postMessage发送失败:', error);
+            console.error("%c[AntiDebug] postMessage发送失败: %s", sone_color, error);
         }
     }
 }
 
     // 🆕 重扫描功能：清理资源并重新开始扫描
     function restartScanning() {
-        console.log('🔄 开始重新扫描Vue实例...');
+        console.log("%c🔄 开始重新扫描Vue实例...", sone_color);
         
         // 清理现有资源
         allTimeoutIds.forEach(id => clearTimeout(id));
@@ -122,7 +123,7 @@ function sendToExtension(data) {
                             routerBase: extractRouterBase(cached.routerInstance)
                         };
                     } catch (e) {
-                        console.warn('获取Router最新数据时出错:', e);
+                        console.warn("%c获取Router最新数据时出错: %s", sone_color, e);
                         return null;
                     }
                 }).filter(data => data !== null);
@@ -214,7 +215,7 @@ function sendToExtension(data) {
             // 默认返回 history 模式
             return 'history';
         } catch (e) {
-            console.warn('检测路由模式时出错:', e);
+            console.warn("%c检测路由模式时出错: %s", sone_color, e);
             return 'history';
         }
     }
@@ -235,7 +236,7 @@ function sendToExtension(data) {
                     return router.options.history.base;
                 }
             } catch (e) {
-                console.warn('提取Router基础路径时出错:', e);
+                console.warn("%c提取Router基础路径时出错: %s", sone_color, e);
             }
             return '';
         }
@@ -296,9 +297,9 @@ function sendToExtension(data) {
                 return list;
             }
 
-            console.warn('🚫 无法列出路由信息');
+            console.warn("%c🚫 无法列出路由信息", sone_color);
         } catch (e) {
-            console.warn('获取路由列表时出错:', e);
+            console.warn("%c获取路由列表时出错: %s", sone_color, e);
         }
 
         return list;
@@ -390,7 +391,7 @@ function sendToExtension(data) {
                     vue._router;
             }
         } catch (e) {
-            console.warn('获取Router实例时出错:', e);
+            console.warn("%c获取Router实例时出错: %s", sone_color, e);
         }
         return null;
     }
@@ -441,13 +442,13 @@ function sendToExtension(data) {
 
                     // 立即输出新发现的Router（仅控制台）
                     const instanceIndex = validInstancesCache.length;
-                    console.log(`\n📋 Vue Router 路由列表 [实例 ${instanceIndex} - Vue ${vueVersion} - ${routerMode} 模式]：`);
+                    console.log(`%c📋 Vue Router 路由列表 [实例 ${instanceIndex} - Vue ${vueVersion} - ${routerMode} 模式]：`, sone_color);
                     console.table(allRoutes.map(route => ({
                         Name: route.name || '(unnamed)',
                         Path: route.path
                     })));
-                    console.log(`\n🔗 Vue Router 实例 [${instanceIndex}]：`);
-                    console.log(routerInstance);
+                    console.log(`%c🔗 Vue Router 实例 [${instanceIndex}]：`, sone_color);
+                    console.log("%c%s", sone_color, routerInstance && typeof routerInstance === "object" ? JSON.stringify(routerInstance) : routerInstance);
                 }
             }
         }
@@ -508,7 +509,7 @@ function sendToExtension(data) {
 
         // 输出检测结束信息
         if (validInstancesCache.length === 0) {
-            console.log('❌ 未找到任何含Router的Vue实例');
+            console.log("%c❌ 未找到任何含Router的Vue实例", sone_color);
         }
     }
 

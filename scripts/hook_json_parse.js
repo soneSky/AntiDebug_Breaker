@@ -14,6 +14,8 @@
 
     const SCRIPT_ID = 'hook_json_parse';
 
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
+
     function clear_Antidebug(id) {
         localStorage.removeItem("Antidebug_breaker_" + id + "_flag");
         localStorage.removeItem("Antidebug_breaker_" + id + "_param");
@@ -23,31 +25,46 @@
 
     function initHook() {
         let flag = localStorage.getItem("Antidebug_breaker_" + SCRIPT_ID + "_flag");
-        let param = JSON.parse(localStorage.getItem("Antidebug_breaker_" + SCRIPT_ID + "_param"));
+        // 默认启用 hook，如果没有设置 flag 则默认为 "0"
+        if (flag === null) {
+            flag = "0";
+            localStorage.setItem("Antidebug_breaker_" + SCRIPT_ID + "_flag", "0");
+        }
+        let param = localStorage.getItem("Antidebug_breaker_" + SCRIPT_ID + "_param");
+        try {
+            param = JSON.parse(param || "[]");
+        } catch (e) {
+            param = [];
+        }
         let is_debugger = localStorage.getItem("Antidebug_breaker_" + SCRIPT_ID + "_debugger");
         let is_stack = localStorage.getItem("Antidebug_breaker_" + SCRIPT_ID + "_stack");
 
         let json_p = JSON.parse;
         JSON.parse = function () {
             if (flag === "0") {
-                console.log("调用JSON.parse ---> ", arguments[0]);
+                if (typeof arguments[0] === "string") {
+                    console.log("%c调用JSON.parse ---> ", sone_color, arguments[0]);
+                } else {
+                    console.log("调用JSON.parse --->", arguments[0]);
+                }
                 if (is_debugger === "1") {
                     debugger;
                 }
                 if (is_stack === "1") {
-                    console.log(new Error().stack);
+                    console.log("%c" + new Error().stack, sone_color);
                 }
             } else {
                 if (arguments[0] && typeof arguments[0] === "string" && param.some(item => arguments[0].includes(item))) {
-                    console.log("捕获到调用JSON.parse指定字符串 ---> ", arguments[0]);
+                    console.log("%c捕获到调用JSON.parse指定字符串 --->", sone_color, arguments[0]);
                     if (is_debugger === "1") {
                         debugger;
                     }
                     if (is_stack === "1") {
-                        console.log(new Error().stack);
+                        console.log("%c" + new Error().stack, sone_color);
                     }
                 }
             }
+            console.log("%c调用JSON.parse返回值 --->", sone_color, json_p(...arguments));
             return json_p(...arguments);
         }
         clear_Antidebug(SCRIPT_ID);
@@ -74,4 +91,16 @@
 
     // 立即设置监听器
     setupConfigListener();
+
+    // 如果没有收到扩展消息，也尝试直接初始化（支持单独作为 UserScript 运行）
+    setTimeout(() => {
+        let flag = localStorage.getItem("Antidebug_breaker_" + SCRIPT_ID + "_flag");
+        // 如果还没有配置，自动设置默认配置并初始化
+        if (flag === null) {
+            localStorage.setItem("Antidebug_breaker_" + SCRIPT_ID + "_flag", "0");
+            initHook();
+        } else {
+            initHook();
+        }
+    }, 100);
 })();

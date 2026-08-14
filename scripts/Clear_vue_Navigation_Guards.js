@@ -24,6 +24,8 @@
     //     return temp_toString.apply(this, arguments);
     // }
 
+    const sone_color = "background-image:-webkit-gradient( linear, left top, right top, color-stop(0, #f22), color-stop(0.15, #f2f), color-stop(0.3, #22f), color-stop(0.45, #2ff), color-stop(0.6, #2f2),color-stop(0.75, #2f2), color-stop(0.9, #ff2), color-stop(1, #f22) );font-size:2em;";
+
     let temp_push = Array.prototype.push; // 将xxx修改为要hook的方法，temp_xxx变量名可以根据需要进行修改命名
 
     Array.prototype.push = function () { // 将xxx修改为要hook的方法
@@ -44,13 +46,13 @@
                 return temp_push.call(this, ...arguments);
             }
             else if (temp_array[3].includes('beforeEach') || temp_array[2].includes('beforeEach')) {
-                console.log(...arguments);
-                console.log("%c存在全局前置路由守卫并已清除", "color: green;");
+                console.log("%c" + [...arguments].join(' '), sone_color);
+                console.log("%c存在全局前置路由守卫并已清除", sone_color);
                 return temp_push.call(this); // 将网站js调用目标方法时所传入的内容传给原方法执行并返回结果
             }
             else if (temp_array[3].includes('beforeResolve') || temp_array[2].includes('beforeResolve')) {
-                console.log(...arguments);
-                console.log("%c存在全局解析守卫并已清除", "color: green;");
+                console.log("%c" + [...arguments].join(' '), sone_color);
+                console.log("%c存在全局解析守卫并已清除", sone_color);
                 return temp_push.call(this); // 将网站js调用目标方法时所传入的内容传给原方法执行并返回结果
             }
         }
