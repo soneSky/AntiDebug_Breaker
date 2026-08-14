@@ -1,13 +1,18 @@
 {
-  "name": "AntiDebug Breaker",
-  "version": "3.0.8",
-  "description": "JavaScript Reverse Tools -- JS逆向工具",
+  "name": "AntiDebug Breaker_sonesky",
+  "version": "9.9.9",
+  "description": "反调试破除者 - 支持MCP集成",
   "manifest_version": 3,
   "permissions": [
     "storage",
     "scripting",
     "activeTab",
-    "tabs"
+    "tabs",
+    "cookies",
+    "webRequest",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "declarativeNetRequestFeedback"
   ],
   "host_permissions": [
     "<all_urls>"
