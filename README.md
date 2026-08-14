@@ -4,6 +4,8 @@
 
 本插件是基于<a href="https://github.com/0xsdeo/Hook_JS">Hook_JS</a>库所写的Google插件，将致力于辅助前端JavaScript逆向以及渗透测试信息收集。
 
+**新增 MCP Server 支持**：通过 MCP（Model Context Protocol）协议与 Cursor AI 集成，实现 AI 驱动的浏览器自动化和 JS 逆向分析。
+
 如何提交您自己的脚本：<a href="https://github.com/0xsdeo/AntiDebug_Breaker/wiki/%E6%8F%90%E4%BA%A4%E6%82%A8%E8%87%AA%E5%B7%B1%E7%9A%84hook%E8%84%9A%E6%9C%AC">AntiDebug_Breaker wiki</a>
 
 ## 赞助商
@@ -36,6 +38,127 @@ SpiderDemo 靶场练习网站：https://www.spiderdemo.cn
 
 将源码下载到本地后打开chrome，访问`chrome://extensions/`，点击左上角的`加载未打包的扩展程序`，然后选中源码文件夹即可：
 ![1753669187234](image/README/1753669187234.png)
+
+## MCP Server 集成
+
+本插件新增了 MCP（Model Context Protocol）服务器，可与 Cursor AI 等支持 MCP 的工具集成，实现 AI 驱动的浏览器自动化和 JS 逆向分析。
+
+### 构建 MCP Server
+
+```bash
+cd mcp-server
+npm install
+npm run build
+```
+
+### Cursor 配置
+
+在 Cursor 的 `~/.cursor/mcp.json` 中添加以下配置：
+
+```json
+{
+  "mcpServers": {
+    "AntiDebug_Breaker_mcp": {
+      "command": "node",
+      "args": ["/path/to/AntiDebug_Breaker_mcp/mcp-server/dist/index.js"],
+      "env": {
+        "MCP_PORT": "9527"
+      }
+    }
+  }
+}
+```
+
+注意将 `/path/to/` 替换为实际路径。
+
+### 使用说明
+
+1. 启动 MCP Server：`cd mcp-server && npm start`
+2. 在 Chrome 中加载插件（开发模式），打开目标网站
+3. 点击插件弹出窗口 → MCP 标签 → 启用 MCP 开关
+4. 确保端口与 mcp.json 中配置一致
+5. 在 Cursor 中使用 MCP 工具控制浏览器
+
+### MCP 工具列表
+
+| 工具名 | 功能描述 |
+|--------|----------|
+| `get_connection_status` | 获取浏览器扩展的连接状态 |
+| `get_page_info` | 获取当前页面基本信息（URL、标题、域名等） |
+| `get_network_requests` | 获取网络请求/API调用记录 |
+| `get_vue_routes` | 获取Vue Router路由信息 |
+| `get_hook_data` | 获取Hook脚本捕获的数据 |
+| `get_enabled_scripts` | 获取当前已启用的脚本列表 |
+| `toggle_script` | 启用/禁用指定脚本 |
+| `navigate_to` | 导航到指定URL或Vue路由 |
+| `get_cookies` | 获取当前页面的Cookie |
+| `get_local_storage` | 获取LocalStorage数据 |
+| `get_session_storage` | 获取SessionStorage数据 |
+| `execute_script` | 在页面上下文中执行JavaScript代码 |
+| `get_dom_info` | 获取页面DOM结构信息 |
+| `configure_hook` | 配置Hook脚本的参数（关键字过滤、debugger开关等） |
+| `list_available_scripts` | 获取所有可用脚本列表及其描述 |
+| `refresh_page` | 刷新当前页面 |
+| `take_screenshot` | 截取当前页面的屏幕截图 |
+| `click_element` | 点击页面上的元素 |
+| `fill_input` | 在输入框中填充文本 |
+| `press_key` | 模拟按键操作 |
+| `get_console_messages` | 获取浏览器控制台消息 |
+| `scroll_page` | 滚动页面到指定位置或元素 |
+| `wait_for_selector` | 等待页面上出现指定元素 |
+| `get_element_info` | 获取页面元素的详细信息 |
+| `prepare_route_access` | 准备访问Vue路由（自动启用必要脚本） |
+| `scan_route_for_api` | 访问指定路由并收集该路由触发的API请求 |
+| `batch_scan_routes` | 批量访问多个路由并收集所有API请求 |
+| `enable_encryption_hooks` | 启用RSA和CryptoJS加密Hook脚本 |
+| `analyze_page_encryption` | 分析当前页面使用的加密库和密钥 |
+| `auto_login_and_capture` | 自动填写登录表单并捕获加密数据 |
+| `get_captured_encryption` | 获取Hook脚本捕获的加密数据 |
+| `decrypt_rsa` | 使用私钥解密RSA加密的数据 |
+| `extract_keys_from_js` | 从JS文件提取RSA公钥、私钥等加密信息 |
+| `analyze_login_encryption` | 一键分析登录页面的密码加密方式 |
+| `detect_anti_debug` | 检测页面中的反调试机制 |
+| `auto_bypass_anti_debug` | 检测并自动启用相应的反调试绕过脚本 |
+| `analyze_api_signature` | 分析最近的API请求，提取签名参数 |
+| `extract_vue_data` | 提取页面Vue组件的data、computed、methods等数据 |
+| `extract_react_data` | 提取页面React组件的props、state等数据 |
+| `analyze_authentication` | 分析页面的认证机制（Cookie、localStorage中的token等） |
+| `get_page_forms` | 获取页面所有表单信息 |
+| `auto_fill_form` | 自动填充指定表单的输入框 |
+| `inject_ws_monitor` | 注入WebSocket监控，捕获所有WebSocket通信 |
+| `get_ws_messages` | 获取捕获的WebSocket消息 |
+| `extract_page_data` | 根据选择器提取页面结构化数据 |
+| `extract_table_data` | 提取页面表格数据为结构化格式 |
+| `full_page_analysis` | 一键全面分析页面：反调试检测、框架识别、加密分析、认证分析 |
+| `click_and_capture` | 点击指定元素并捕获产生的所有网络请求 |
+| `get_network_requests_burp` | 获取网络请求并转换为Burp Suite格式 |
+| `click_and_get_burp` | 点击元素并获取产生的网络请求（Burp格式） |
+| `login_and_get_burp` | 自动填写登录表单并获取登录请求的Burp格式数据包 |
+| `scan_sensitive_data` | 扫描最近的API响应中是否包含敏感数据（身份证、手机号、银行卡等） |
+| `scan_route_sensitive_data` | 访问指定路由并扫描返回数据中的敏感信息泄露 |
+| `batch_scan_sensitive_routes` | 批量扫描多个路由，检测敏感数据泄露 |
+| `start_sensitive_monitor` | 开始实时监控所有API响应中的敏感数据泄露 |
+| `get_sensitive_alerts` | 获取敏感数据监控产生的告警信息 |
+| `get_headers_config` | 获取当前所有请求头组和请求头的配置信息 |
+| `create_header_group` | 创建一个新的请求头组 |
+| `delete_header_group` | 删除指定的请求头组 |
+| `switch_header_group` | 切换到指定的请求头组 |
+| `add_header` | 向指定请求头组添加一个请求头 |
+| `update_header` | 更新指定请求头的名称、值或启用状态 |
+| `delete_header` | 从请求头组中删除指定的请求头 |
+| `toggle_header` | 启用或禁用指定的请求头 |
+| `batch_update_headers` | 批量更新请求头组中的所有请求头 |
+| `quick_set_headers` | 快速设置请求头：创建组+添加请求头+启用 |
+| `smart_enable_scenario` | 根据用户意图智能启用相关脚本组合 |
+| `list_scenarios` | 获取所有可用的智能场景配置列表 |
+| `quick_encryption_analysis` | 一键启用加密分析（Hook JSEncrypt RSA + Hook CryptoJS） |
+| `quick_anti_debug_bypass` | 一键反调试绕过（自动检测 + 启用绕过脚本） |
+| `quick_api_analysis` | 一键API分析（启用XHR/Fetch Hook脚本） |
+| `quick_vue_analysis` | 一键Vue分析（启用路由获取脚本） |
+| `smart_unauthorized_test` | 智能未授权测试（先检测Vue站点，再进行未授权测试） |
+| `detect_site_framework` | 检测当前站点使用的前端框架（Vue、React等） |
+| `batch_enable_scripts` | 批量启用或禁用多个脚本 |
+| `disable_all_scripts` | 禁用当前页面的所有已启用脚本 |
 
 ## 脚本使用场景
 
@@ -72,7 +195,7 @@ SpiderDemo 靶场练习网站：https://www.spiderdemo.cn
 - <a href="#Promise">Promise</a>
 - <a href="#Math.random">Math.random</a>
 - <a href="#Date.now">Date.now</a>
-- <a href="#performance.now">performance.now</a>
+- <a href="#flip_video">视频代码翻转</a>
 
 > Vue
 
@@ -244,9 +367,9 @@ Hook SM-crypto加密库当中的 SM2、SM3、SM4算法。如果未打印请自�
 
 固定Date.now返回值
 
-- <a id="performance.now" href="https://github.com/0xsdeo/AntiDebug_Breaker/blob/main/scripts/hook_performance_now.js">performance.now</a>
+- <a id="flip_video" href="https://github.com/0xsdeo/AntiDebug_Breaker/blob/main/scripts/flip_video.js">视频代码翻转</a>
 
-固定performance.now返回值
+对页面中的 video 元素进行放大和旋转操作。默认放大倍数为 1.5，旋转角度为 90 度。支持通过 Hook 配置参数调节 scale（放大倍数）和 rotate（旋转角度）。脚本会自动监听 DOM 变化，当检测到新增 video 元素时自动应用翻转。也可在控制台调用 `window.flipVideo(scale, rotate)` 动态调整参数。
 
 ### Vue
 
