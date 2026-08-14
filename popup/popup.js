@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('[Popup Debug] popup.js 已加载, UA_LIST:', window.UA_LIST ? window.UA_LIST.length + ' 条' : '未定义');
     // ========== Toast提示功能（仅用于固定值保存） ==========
     function showToast(message = '已保存') {
         const toast = document.getElementById('toast');
@@ -17,17 +18,189 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 2000);
     }
     // ========================================================
+
+    // ========== MCP连接管理 ==========
+    const mcpToggle = document.getElementById('mcp-toggle');
+    const mcpIndicator = document.getElementById('mcp-indicator');
+    const mcpStatusText = document.getElementById('mcp-status-text');
+
+    // 初始化MCP状态
+    function initMCPStatus() {
+        chrome.storage.local.get(['mcp_enabled'], (result) => {
+            const enabled = result.mcp_enabled === true;
+            if (mcpToggle) {
+                mcpToggle.checked = enabled;
+            }
+            updateMCPStatusUI();
+        });
+    }
+
+    // 更新MCP状态UI
+    function updateMCPStatusUI() {
+        chrome.runtime.sendMessage({ type: 'GET_MCP_STATUS' }, (response) => {
+            if (chrome.runtime.lastError) {
+                // 忽略错误
+                return;
+            }
+            
+            if (response) {
+                const { connected, enabled, error, connecting, port, reconnectAttempts, maxReconnectAttempts } = response;
+                
+                if (mcpIndicator) {
+                    mcpIndicator.classList.remove('connected', 'error', 'connecting');
+                    if (connected) {
+                        mcpIndicator.classList.add('connected');
+                    } else if (error) {
+                        mcpIndicator.classList.add('error');
+                    } else if (connecting) {
+                        mcpIndicator.classList.add('connecting');
+                    }
+                }
+                
+                if (mcpStatusText) {
+                    // 移除所有状态类名
+                    mcpStatusText.classList.remove('status-connected', 'status-error', 'status-disabled', 'status-connecting');
+                    
+                    if (!enabled) {
+                        mcpStatusText.textContent = '状态：已禁用';
+                        mcpStatusText.classList.add('status-disabled');
+                    } else if (connected) {
+                        mcpStatusText.textContent = `状态：已连接 ✓ (端口:${port})`;
+                        mcpStatusText.classList.add('status-connected');
+                    } else if (error) {
+                        mcpStatusText.textContent = `状态：连接失败 ✗ (端口:${port})`;
+                        mcpStatusText.classList.add('status-error');
+                    } else if (connecting) {
+                        mcpStatusText.textContent = '状态：连接中...';
+                        mcpStatusText.classList.add('status-connecting');
+                    } else {
+                        // 正在尝试重连
+                        const attemptsInfo = reconnectAttempts > 0 ? ` (${reconnectAttempts}/${maxReconnectAttempts})` : '';
+                        mcpStatusText.textContent = `状态：等待连接${attemptsInfo}`;
+                        mcpStatusText.classList.add('status-connecting');
+                    }
+                }
+            }
+        });
+    }
+
+    // MCP开关事件
+    if (mcpToggle) {
+        mcpToggle.addEventListener('change', (e) => {
+            const enabled = e.target.checked;
+            chrome.storage.local.set({ mcp_enabled: enabled }, () => {
+                updateMCPStatusUI();
+                showToast(enabled ? 'MCP已启用' : 'MCP已禁用');
+            });
+        });
+    }
+
+    // MCP全局操作模式开关
+    const mcpGlobalToggleEl = document.getElementById('mcp-global-toggle');
+    
+    // 初始化MCP全局操作模式
+    function initMCPGlobalMode() {
+        chrome.storage.local.get(['mcp_global_mode'], (result) => {
+            const globalMode = result.mcp_global_mode === true;
+            if (mcpGlobalToggleEl) {
+                mcpGlobalToggleEl.checked = globalMode;
+            }
+        });
+    }
+    
+    if (mcpGlobalToggleEl) {
+        mcpGlobalToggleEl.addEventListener('change', (e) => {
+            const enabled = e.target.checked;
+            chrome.storage.local.set({ mcp_global_mode: enabled }, () => {
+                showToast(enabled ? '全局操作模式已启用' : '全局操作模式已禁用');
+            });
+        });
+    }
+    
+    // 初始化MCP全局模式
+    initMCPGlobalMode();
+
+    // 初始化MCP
+    initMCPStatus();
+
+    // ========== MCP端口配置 ==========
+    const mcpPortInput = document.getElementById('mcp-port-input');
+    const mcpPortSaveBtn = document.getElementById('mcp-port-save');
+    
+    // 初始化MCP端口
+    function initMCPPort() {
+        chrome.storage.local.get(['mcp_port'], (result) => {
+            const port = result.mcp_port || 9527;
+            if (mcpPortInput) {
+                mcpPortInput.value = port;
+            }
+        });
+    }
+    
+    // 保存端口配置
+    function saveMCPPort() {
+        if (!mcpPortInput) return;
+        
+        let port = parseInt(mcpPortInput.value, 10);
+        
+        // 验证端口范围
+        if (isNaN(port) || port < 1024 || port > 65535) {
+            showToast('端口无效 (1024-65535)');
+            return;
+        }
+        
+        chrome.storage.local.set({ mcp_port: port }, () => {
+            showToast(`端口已设置为 ${port}`);
+            // 重新初始化MCP连接
+            chrome.storage.local.get(['mcp_enabled'], (result) => {
+                if (result.mcp_enabled) {
+                    // 通知background重新连接
+                    chrome.runtime.sendMessage({ type: 'RECONNECT_MCP' }, () => {
+                        if (chrome.runtime.lastError) {
+                            // 忽略错误
+                        }
+                    });
+                }
+            });
+        });
+    }
+    
+    // 端口保存按钮点击事件
+    if (mcpPortSaveBtn) {
+        mcpPortSaveBtn.addEventListener('click', saveMCPPort);
+    }
+    
+    // 端口输入框回车事件
+    if (mcpPortInput) {
+        mcpPortInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                saveMCPPort();
+            }
+        });
+    }
+    
+    // 初始化端口配置
+    initMCPPort();
+    // ========================================================
+
+    // 定期更新MCP状态
+    setInterval(updateMCPStatusUI, 3000);
+    // ========================================================
     
     // 🆕 自动触发Vue重扫描
     function triggerVueRescan() {
         try {
+            // 向页面发送重扫描消息
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                 if (tabs[0]) {
                     chrome.tabs.sendMessage(tabs[0].id, {
                         type: 'TRIGGER_VUE_RESCAN',
                         source: 'antidebug-extension'
                     }, () => {
-                        if (chrome.runtime.lastError) {}
+                        // 忽略错误，某些页面可能没有content script
+                        if (chrome.runtime.lastError) {
+                            // 静默处理错误
+                        }
                     });
                 }
             });
@@ -36,27 +209,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 自动触发React重扫描
-    function triggerReactRescan() {
-        try {
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                if (tabs[0]) {
-                    chrome.tabs.sendMessage(tabs[0].id, {
-                        type: 'TRIGGER_REACT_RESCAN',
-                        source: 'antidebug-extension'
-                    }, () => {
-                        if (chrome.runtime.lastError) {}
-                    });
-                }
-            });
-        } catch (error) {
-            console.warn('触发React重扫描失败:', error);
-        }
-    }
-
     // popup打开时自动触发重扫描
     triggerVueRescan();
-    triggerReactRescan();
 
     // ========== Base模式偏好设置（全局持久化） ==========
     function getBaseModePreference() {
@@ -79,66 +233,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const scriptsGrid = document.querySelector('.scripts-grid');
     const hookContent = document.querySelector('.hook-content');
     const vueContent = document.querySelector('.vue-content');
+    const mcpContent = document.querySelector('.mcp-content');
+    const headersContent = document.querySelector('.headers-content');
     const vueScriptsList = document.querySelector('.vue-scripts-list');
     const vueRouterData = document.querySelector('.vue-router-data');
-    const vueVersionDisplay = document.querySelector('.vue-version-display');
-    const versionValue = document.querySelector('.version-value');
+    const vueVersionBadge = document.querySelector('.vue-version-badge');
+    const versionValue = document.querySelector('.vue-version-badge .version-value');
+    const routesInfoBar = document.querySelector('.routes-info-bar');
+    const vueTabsList = document.querySelector('.vue-tabs-list');
+    const vueScriptsPanel = document.querySelector('.vue-scripts-panel');
+    const vueRoutesPanel = document.querySelector('.vue-routes-panel');
+    const vueEmptyHint = document.querySelector('.vue-empty-hint');
     const routesListContainer = document.querySelector('.routes-list-container');
     const noResults = document.querySelector('.no-results');
-    const searchContainer = document.querySelector('.search-container');
+    const searchSection = document.querySelector('.search-section');
     const searchInput = document.getElementById('search-input');
     const hookNoticeContainer = document.querySelector('.hook-notice-container');
     const hookFilterEnabledBtn = document.getElementById('hook-filter-enabled');
     const hookFilterDisabledBtn = document.getElementById('hook-filter-disabled');
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const vueRouteSearchContainer = document.querySelector('.vue-route-search-container');
+    const tabBtns = document.querySelectorAll('.nav-item');
+    // 新的紧凑布局元素
+    const vueInlineInfo = document.querySelector('.vue-inline-info');
+    const routesModeInfo = document.querySelector('.routes-mode-info');
+    const vueVersionInline = document.querySelector('.vue-version-inline .version-value');
+    const routeToolbar = document.querySelector('.route-toolbar');
     const vueRouteSearchInput = document.getElementById('vue-route-search-input');
-    const routesActionsFooter = document.querySelector('.routes-actions-footer');
+    const routesActionsFooter = document.querySelector('.vue-routes-panel > .routes-actions-footer');
     const copyAllPathsBtn = document.querySelector('.copy-all-paths-btn');
     const copyAllUrlsBtn = document.querySelector('.copy-all-urls-btn');
-
-    // Vue/React 子Tab相关DOM元素
-    const vueSubContent = document.querySelector('.vue-sub-content');
-    const reactSubContent = document.querySelector('.react-sub-content');
-    const reactScriptsList = document.querySelector('.react-scripts-list');
-    const vueSubtabBtns = document.querySelectorAll('.vue-subtab-btn');
+    
+    // MCP全局操作模式
+    const mcpGlobalToggle = document.getElementById('mcp-global-toggle');
 
     // 🆕 全局模式相关DOM元素
     const globalModeToggle = document.getElementById('global-mode-toggle');
     const modeText = document.querySelector('.mode-text');
-
-    // 反反Hook检测开关DOM元素
-    const antiAntiHookToggle = document.getElementById('antiantiHook-toggle');
-
-    // 辅助配置按钮 & 面板
-    const auxConfigBtn = document.getElementById('aux-config-btn');
-    const auxConfigPanel = document.getElementById('aux-config-panel');
-
-    // 点击按钮切换面板显示
-    if (auxConfigBtn && auxConfigPanel) {
-        auxConfigBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isOpen = auxConfigPanel.classList.contains('open');
-            if (isOpen) {
-                auxConfigPanel.classList.remove('open');
-                auxConfigBtn.classList.remove('active');
-            } else {
-                auxConfigPanel.classList.add('open');
-                auxConfigBtn.classList.add('active');
-            }
-        });
-
-        // 点击面板内部不关闭
-        auxConfigPanel.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
-
-        // 点击外部关闭面板
-        document.addEventListener('click', () => {
-            auxConfigPanel.classList.remove('open');
-            auxConfigBtn.classList.remove('active');
-        });
-    }
 
     let currentTab = 'antidebug'; // 当前选中的标签
     let allScripts = []; // 所有脚本数据
@@ -148,16 +277,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedVueDataList = []; // 在popup中缓存所有Vue实例数据（改为数组）
     let currentInstanceIndex = 0; // 当前选中的实例索引
     let isFirstVueDataDisplay = true; // 🆕 标记是否是首次显示Vue路由数据
-    let currentVueSubTab = 'vue'; // Vue/React子板块当前激活的子Tab
-    let cachedReactData = null; // 缓存 React 路由数据
-    let cachedReactDataList = []; // Cache React router instances for multi-root pages
-    let currentReactInstanceIndex = 0; // Currently selected React instance
-    let isFirstReactDataDisplay = true; // Track first React route list render for last-opened restore
-    let hasRestoredReactInstanceSelection = false; // Avoid repeatedly switching React instance from storage
-    let hasRestoredReactLastOpenedRoute = false; // Avoid repeated React route highlight after success
-    let reactLastOpenedRouteRestoreTimer = null; // Debounce restore while route list is re-rendering
-    let reactLastOpenedRouteRestoreDeadline = Date.now() + 3000; // Route data may re-render shortly after popup opens
-    let freezeReactRouteDisplayAfterNavigation = false; // Keep current React route list stable after opening a route
 
     // 🆕 全局模式状态管理
     let isGlobalMode = false; // 当前是否为全局模式
@@ -165,32 +284,108 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 🆕 Hook板块筛选状态（'enabled' | 'disabled' | null）
     let hookFilterState = null;
+    
+    // 🆕 Vue路由搜索相关全局变量
+    let currentVueRoutes = []; // 当前显示的所有路由
+    let currentVueBaseUrl = ''; // 当前的baseUrl
+    let currentVueRouterMode = 'history'; // 当前路由模式
+    let currentCustomBaseValue = ''; // 当前自定义base值
+    
+    // 🆕 全局搜索函数（供 HTML oninput 调用）
+    window.handleVueRouteSearch = function(searchValue) {
+        const searchTerm = (searchValue || '').toLowerCase().trim();
+        
+        if (currentVueRoutes.length === 0) {
+            console.log('[Vue Search] 没有路由数据');
+            return;
+        }
+        
+        console.log('[Vue Search] 搜索:', searchTerm, '路由数量:', currentVueRoutes.length);
+        
+        if (!searchTerm) {
+            // 显示所有路由
+            renderVueRoutesGlobal(currentVueRoutes);
+        } else {
+            // 过滤路由
+            const filteredRoutes = currentVueRoutes.filter(route => {
+                const path = route.path.toLowerCase();
+                const name = (route.name || '').toLowerCase();
+                return path.includes(searchTerm) || name.includes(searchTerm);
+            });
+            console.log('[Vue Search] 过滤后:', filteredRoutes.length);
+            renderVueRoutesGlobal(filteredRoutes);
+        }
+    };
 
     // 🆕 全局模式存储键名
     const GLOBAL_MODE_KEY = 'antidebug_mode';
     const GLOBAL_SCRIPTS_KEY = 'global_scripts';
-    const LAST_VUE_SUBTAB_KEY = 'last_active_vue_subtab';
-
-    // 🆕 脚本组合转换函数：将合并脚本展开为独立脚本（移到前面以便其他函数使用）
-    const expandCombinedScripts = (scriptIds) => {
-        const expanded = [...scriptIds];
-        
-        // 检测 Hook_JSEncrypt_SMcrypto 并展开为两个独立脚本
-        const combinedIndex = expanded.indexOf('Hook_JSEncrypt_SMcrypto');
-        if (combinedIndex !== -1) {
-            // 移除合并脚本
-            expanded.splice(combinedIndex, 1);
-            // 添加两个独立脚本（如果不存在）
-            if (!expanded.includes('Hook_SMcrypto')) {
-                expanded.push('Hook_SMcrypto');
-            }
-            if (!expanded.includes('Hook_JSEncrypt')) {
-                expanded.push('Hook_JSEncrypt');
-            }
-        }
-        
-        return expanded;
-    };
+    
+    // 🆕 全局请求头存储键名
+    const HEADERS_GROUPS_KEY = 'global_headers_groups';
+    const HEADERS_DATA_KEY = 'global_headers_data';
+    
+    // 🆕 全局请求头状态
+    let headersGroups = []; // [{id, name}]
+    let headersData = {}; // {groupId: [{id, name, value, enabled}]}
+    let currentHeadersGroupId = null;
+    
+    // 常用请求头列表（用于自动补全）
+    const COMMON_HEADERS = [
+        'Accept',
+        'Accept-Charset',
+        'Accept-Encoding',
+        'Accept-Language',
+        'Authorization',
+        'Cache-Control',
+        'Connection',
+        'Content-Disposition',
+        'Content-Encoding',
+        'Content-Language',
+        'Content-Length',
+        'Content-Type',
+        'Cookie',
+        'Date',
+        'DNT',
+        'Host',
+        'If-Match',
+        'If-Modified-Since',
+        'If-None-Match',
+        'If-Range',
+        'If-Unmodified-Since',
+        'Origin',
+        'Pragma',
+        'Proxy-Authorization',
+        'Range',
+        'Referer',
+        'Sec-Fetch-Dest',
+        'Sec-Fetch-Mode',
+        'Sec-Fetch-Site',
+        'TE',
+        'Transfer-Encoding',
+        'Upgrade',
+        'Upgrade-Insecure-Requests',
+        'User-Agent',
+        'Via',
+        'Warning',
+        'X-Api-Key',
+        'X-Auth-Token',
+        'X-Content-Type-Options',
+        'X-Correlation-ID',
+        'X-CSRF-Token',
+        'X-Custom-Header',
+        'X-Forwarded-For',
+        'X-Forwarded-Host',
+        'X-Forwarded-Port',
+        'X-Forwarded-Proto',
+        'X-Frame-Options',
+        'X-Real-IP',
+        'X-Request-ID',
+        'X-Requested-With',
+        'X-Token',
+        'X-Trace-ID',
+        'X-XSS-Protection'
+    ]; // 当前选中的标签组ID
 
     // 🆕 初始化全局模式状态
     function initializeGlobalMode() {
@@ -199,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const mode = result[GLOBAL_MODE_KEY] || 'standard';
             isGlobalMode = (mode === 'global');
             
-            // 🆕 获取全局脚本列表并展开合并脚本
+            // 获取全局脚本列表，默认为空数组
             globalEnabledScripts = result[GLOBAL_SCRIPTS_KEY] || [];
             
             // 如果没有模式键值，创建默认配置
@@ -213,10 +408,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // 更新UI状态
             updateModeUI();
             
-            // 如果是全局模式，使用全局脚本列表（不展开，因为这是用于存储的）
+            // 如果是全局模式，使用全局脚本列表
             if (isGlobalMode) {
-                // 注意：这里不展开，因为 globalEnabledScripts 用于存储
-                // UI 显示时会在 setTimeout 中展开
+                enabledScripts = [...globalEnabledScripts];
             }
         });
     }
@@ -225,53 +419,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateModeUI() {
         globalModeToggle.checked = isGlobalMode;
         modeText.textContent = isGlobalMode ? '全局模式' : '标准模式';
-    }
-
-    // 更新反反Hook检测开关UI状态
-    function updateAntiAntiHookToggle() {
-        if (!antiAntiHookToggle) return;
-        const isEnabled = enabledScripts.includes('AntiAnti_Hook');
-        antiAntiHookToggle.checked = isEnabled;
-    }
-
-    // 计算所有已启用脚本的合并Hooks数据并存储
-    function updateMergedHooks(currentEnabledScripts) {
-        if (!allScripts || allScripts.length === 0) return;
-
-        if (!currentEnabledScripts.includes('AntiAnti_Hook')) {
-            chrome.storage.local.remove('antidebug_merged_hooks');
-            return;
-        }
-
-        const merged = { Function: [], Property: [] };
-        let hasHooks = false;
-
-        currentEnabledScripts.forEach(scriptId => {
-            const script = allScripts.find(s => s.id === scriptId);
-            if (script && script.Hooks) {
-                hasHooks = true;
-                if (script.Hooks.Function) {
-                    script.Hooks.Function.forEach(fn => {
-                        if (!merged.Function.includes(fn)) {
-                            merged.Function.push(fn);
-                        }
-                    });
-                }
-                if (script.Hooks.Property) {
-                    script.Hooks.Property.forEach(prop => {
-                        if (!merged.Property.includes(prop)) {
-                            merged.Property.push(prop);
-                        }
-                    });
-                }
-            }
-        });
-
-        if (hasHooks) {
-            chrome.storage.local.set({ antidebug_merged_hooks: merged });
-        } else {
-            chrome.storage.local.remove('antidebug_merged_hooks');
-        }
     }
 
     // 🆕 模式切换处理（修复bug：添加旧模式脚本清理）
@@ -289,8 +436,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (isGlobalMode) {
-            // 切换到全局模式（展开合并脚本）
-            enabledScripts = expandCombinedScripts([...globalEnabledScripts]);
+            // 切换到全局模式
+            enabledScripts = [...globalEnabledScripts];
         } else {
             // 切换到标准模式
             // 检查当前URL是否为web网站
@@ -300,8 +447,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 读取当前域名的脚本配置
                 chrome.storage.local.get([hostname], (result) => {
                     if (result[hostname]) {
-                        // 存在配置，使用该配置（展开合并脚本）
-                        enabledScripts = expandCombinedScripts(result[hostname] || []);
+                        // 存在配置，使用该配置
+                        enabledScripts = result[hostname] || [];
                     } else {
                         // 不存在配置，创建空配置
                         enabledScripts = [];
@@ -341,30 +488,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 🆕 更新脚本注册（通知background）
     function updateScriptRegistration() {
-        // 发送前先合并脚本组合，确保注册的是合并版而非独立版
-        const scriptsToRegister = combineCombinableScripts(enabledScripts);
         chrome.runtime.sendMessage({
             type: 'update_scripts_registration',
             hostname: isGlobalMode ? '*' : hostname,
-            enabledScripts: scriptsToRegister,
+            enabledScripts: enabledScripts,
             isGlobalMode: isGlobalMode
         });
     }
 
-    // 监听来自 background 的路由数据更新
+    // 监听来自 background 的 Vue Router 数据更新
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        // React 路由数据更新
-        if (message.type === 'REACT_ROUTER_DATA_UPDATE' && message.hostname === hostname) {
-            if (freezeReactRouteDisplayAfterNavigation) {
-                return;
-            }
-            setCachedReactRouterData(message.data);
-            // 只有当前在 React 子 Tab 时才刷新显示
-            if (currentTab === 'vue' && currentVueSubTab === 'react') {
-                displayReactMultipleInstances();
-            }
-        }
-
         if (message.type === 'VUE_ROUTER_DATA_UPDATE' && message.hostname === hostname) {
             const data = message.data;
             
@@ -415,17 +548,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 请求页面的React Router数据
-    function requestReactRouterData() {
-        if (currentTab_obj && currentTab_obj.id) {
-            chrome.tabs.sendMessage(currentTab_obj.id, {
-                type: 'REQUEST_REACT_ROUTER_DATA'
-            }).catch(err => {
-                console.warn('请求React数据失败:', err);
-            });
-        }
-    }
-
     // 获取当前标签页的域名
     chrome.tabs.query({
         active: true,
@@ -452,11 +574,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         return globalEnabledScripts;
                     } else {
                         // 标准模式：获取该域名下的启用状态
-                        chrome.storage.local.get([hostname, 'last_active_tab', LAST_VUE_SUBTAB_KEY], (result) => {
-                            // 🆕 展开合并脚本
-                            enabledScripts = expandCombinedScripts(result[hostname] || []);
-                            // 初始化合并Hooks数据
-                            updateMergedHooks(enabledScripts);
+                        chrome.storage.local.get([hostname, 'last_active_tab'], (result) => {
+                            enabledScripts = result[hostname] || [];
 
                             // 恢复上次打开的板块
                             if (result.last_active_tab) {
@@ -471,14 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 });
                             }
 
-                            // 恢复Vue子Tab状态
-                            if (result[LAST_VUE_SUBTAB_KEY]) {
-                                currentVueSubTab = result[LAST_VUE_SUBTAB_KEY];
-                                vueSubtabBtns.forEach(b => {
-                                    b.classList.toggle('active', b.dataset.subtab === currentVueSubTab);
-                                });
-                            }
-
                             renderCurrentTab();
 
                             // 检查是否启用了 Get_Vue_0 或 Get_Vue_1 脚本
@@ -489,20 +600,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (hasVueScript) {
                                 requestVueRouterData();
                             }
-
-                            // 如果启用了 Get_React_0，先从 storage 读取缓存，再请求实时数据
-                            if (enabledScripts.includes('Get_React_0')) {
-                                const reactStorageKey = `${hostname}_react_data`;
-                                chrome.storage.local.get([reactStorageKey], (storageResult) => {
-                                    if (storageResult[reactStorageKey]) {
-                                        setCachedReactRouterData(storageResult[reactStorageKey]);
-                                        if (currentTab === 'vue' && currentVueSubTab === 'react') {
-                                            displayReactMultipleInstances();
-                                        }
-                                    }
-                                    requestReactRouterData();
-                                });
-                            }
                         });
                         return [];
                     }
@@ -512,32 +609,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(() => {
                     if (isGlobalMode) {
                         // 🔧 修复：全局模式下也需要恢复上次打开的板块
-                            chrome.storage.local.get(['last_active_tab', LAST_VUE_SUBTAB_KEY], (result) => {
-                                // 恢复上次打开的板块
-                                if (result.last_active_tab) {
-                                    currentTab = result.last_active_tab;
-                                    // 更新UI中的按钮状态
-                                    tabBtns.forEach(b => {
-                                        if (b.dataset.tab === currentTab) {
-                                            b.classList.add('active');
-                                        } else {
-                                            b.classList.remove('active');
-                                        }
-                                    });
-                                }
-
-                                // 恢复Vue子Tab状态
-                                if (result[LAST_VUE_SUBTAB_KEY]) {
-                                    currentVueSubTab = result[LAST_VUE_SUBTAB_KEY];
-                                    vueSubtabBtns.forEach(b => {
-                                        b.classList.toggle('active', b.dataset.subtab === currentVueSubTab);
-                                    });
-                                }
+                        chrome.storage.local.get(['last_active_tab'], (result) => {
+                            // 恢复上次打开的板块
+                            if (result.last_active_tab) {
+                                currentTab = result.last_active_tab;
+                                // 更新UI中的按钮状态
+                                tabBtns.forEach(b => {
+                                    if (b.dataset.tab === currentTab) {
+                                        b.classList.add('active');
+                                    } else {
+                                        b.classList.remove('active');
+                                    }
+                                });
+                            }
                             
-                            // 🆕 展开合并脚本
-                            enabledScripts = expandCombinedScripts([...globalEnabledScripts]);
-                            // 初始化合并Hooks数据
-                            updateMergedHooks(enabledScripts);
+                            enabledScripts = [...globalEnabledScripts];
                             renderCurrentTab();
                             
                             // 检查Vue脚本
@@ -545,20 +631,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 enabledScripts.includes('Get_Vue_1');
                             if (hasVueScript) {
                                 requestVueRouterData();
-                            }
-
-                            // 检查React脚本，先从 storage 读取缓存，再请求实时数据
-                            if (enabledScripts.includes('Get_React_0')) {
-                                const reactStorageKey = `${hostname}_react_data`;
-                                chrome.storage.local.get([reactStorageKey], (storageResult) => {
-                                    if (storageResult[reactStorageKey]) {
-                                        setCachedReactRouterData(storageResult[reactStorageKey]);
-                                        if (currentTab === 'vue' && currentVueSubTab === 'react') {
-                                            displayReactMultipleInstances();
-                                        }
-                                    }
-                                    requestReactRouterData();
-                                });
                             }
                         });
                     } else {
@@ -586,6 +658,28 @@ document.addEventListener('DOMContentLoaded', () => {
                         renderHookScripts(filteredScripts);
                     }
                 });
+                
+                // 🆕 Vue路由搜索功能（全局事件监听）
+                const vueSearchInput = document.getElementById('vue-route-search-input');
+                if (vueSearchInput) {
+                    vueSearchInput.addEventListener('input', (e) => {
+                        const searchTerm = e.target.value.toLowerCase().trim();
+                        if (currentVueRoutes.length === 0) return;
+                        
+                        if (!searchTerm) {
+                            // 显示所有路由
+                            renderVueRoutesGlobal(currentVueRoutes);
+                        } else {
+                            // 过滤路由
+                            const filteredRoutes = currentVueRoutes.filter(route => {
+                                const path = route.path.toLowerCase();
+                                const name = (route.name || '').toLowerCase();
+                                return path.includes(searchTerm) || name.includes(searchTerm);
+                            });
+                            renderVueRoutesGlobal(filteredRoutes);
+                        }
+                    });
+                }
             });
     });
 
@@ -593,20 +687,6 @@ document.addEventListener('DOMContentLoaded', () => {
     globalModeToggle.addEventListener('change', (e) => {
         handleModeToggle(e.target.checked);
     });
-
-    // 反反Hook检测开关事件监听
-    if (antiAntiHookToggle) {
-        antiAntiHookToggle.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                if (!enabledScripts.includes('AntiAnti_Hook')) {
-                    enabledScripts.push('AntiAnti_Hook');
-                }
-            } else {
-                enabledScripts = enabledScripts.filter(id => id !== 'AntiAnti_Hook');
-            }
-            updateStorage(enabledScripts);
-        });
-    }
 
     // 标签切换事件
     tabBtns.forEach(btn => {
@@ -628,17 +708,6 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.storage.local.set({
                 'last_active_tab': currentTab
             });
-        });
-    });
-
-    // Vue/React 子Tab切换事件
-    vueSubtabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            vueSubtabBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentVueSubTab = btn.dataset.subtab;
-            chrome.storage.local.set({ [LAST_VUE_SUBTAB_KEY]: currentVueSubTab });
-            renderVueSubTab();
         });
     });
 
@@ -683,91 +752,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 根据当前标签获取要显示的脚本
     function getScriptsForCurrentTab() {
-        let category = currentTab;
-        if (currentTab === 'vue') {
-            category = currentVueSubTab; // 'vue' 或 'react'
-        }
-        return allScripts.filter(script => 
-            script.category === category && 
-            !script.hidden  // 🆕 过滤隐藏脚本
-        );
+        return allScripts.filter(script => script.category === currentTab);
     }
 
     // 渲染当前标签的内容
     function renderCurrentTab() {
         const scriptsToShow = getScriptsForCurrentTab();
 
+        // 隐藏所有内容区域
+        scriptsGrid.style.display = 'none';
+        hookContent.style.display = 'none';
+        vueContent.style.display = 'none';
+        if (mcpContent) mcpContent.style.display = 'none';
+        if (headersContent) headersContent.style.display = 'none';
+
         if (currentTab === 'antidebug') {
             // 显示反调试板块
-            searchContainer.style.display = 'flex';
-            searchContainer.classList.remove('hook-search-container');
+            if (searchSection) searchSection.style.display = 'block';
             if (hookNoticeContainer) hookNoticeContainer.style.display = 'none';
             scriptsGrid.style.display = 'grid';
-            hookContent.style.display = 'none';
-            vueContent.style.display = 'none';
             renderAntiDebugScripts(scriptsToShow);
         } else if (currentTab === 'hook') {
             // 显示Hook板块
-            searchContainer.style.display = 'flex';
-            searchContainer.classList.add('hook-search-container');
+            if (searchSection) searchSection.style.display = 'block';
             if (hookNoticeContainer) hookNoticeContainer.style.display = 'flex';
-            scriptsGrid.style.display = 'none';
             hookContent.style.display = 'flex';
-            vueContent.style.display = 'none';
             // 🆕 读取筛选状态并更新按钮
             loadHookFilterState().then(() => {
                 updateHookFilterButtons();
                 renderHookScripts(scriptsToShow);
             });
         } else if (currentTab === 'vue') {
-            // 显示Vue/React板块
-            searchContainer.style.display = 'none';
-            searchContainer.classList.remove('hook-search-container');
+            // 显示Vue板块
+            if (searchSection) searchSection.style.display = 'none';
             if (hookNoticeContainer) hookNoticeContainer.style.display = 'none';
-            scriptsGrid.style.display = 'none';
-            hookContent.style.display = 'none';
             vueContent.style.display = 'flex';
-            // 同步子Tab按钮状态
-            vueSubtabBtns.forEach(b => {
-                b.classList.toggle('active', b.dataset.subtab === currentVueSubTab);
-            });
-            renderVueSubTab();
-        }
-
-        // 每次渲染后同步反反Hook开关状态
-        updateAntiAntiHookToggle();
-    }
-
-    // 渲染Vue/React子板块内容
-    function renderVueSubTab() {
-        if (currentVueSubTab === 'vue') {
-            if (vueSubContent) vueSubContent.style.display = 'flex';
-            if (reactSubContent) reactSubContent.style.display = 'none';
-            const scripts = allScripts.filter(s => s.category === 'vue' && !s.hidden);
-            renderVueScripts(scripts);
+            renderVueScripts(scriptsToShow);
+            // 生成实例标签并显示数据
             displayMultipleInstances();
-        } else if (currentVueSubTab === 'react') {
-            if (vueSubContent) vueSubContent.style.display = 'none';
-            if (reactSubContent) reactSubContent.style.display = 'flex';
-            const scripts = allScripts.filter(s => s.category === 'react' && !s.hidden);
-            renderReactScripts(scripts);
-
-            const hasReactScript = enabledScripts.includes('Get_React_0');
-
-            // 优先用内存缓存，无缓存则从 storage 读取（background 已存储时可直接展示）
-            if (cachedReactData) {
-                displayReactMultipleInstances();
-                if (hasReactScript) requestReactRouterData();
-            } else {
-                const reactStorageKey = `${hostname}_react_data`;
-                chrome.storage.local.get([reactStorageKey], (storageResult) => {
-                    if (storageResult[reactStorageKey]) {
-                        setCachedReactRouterData(storageResult[reactStorageKey]);
-                    }
-                    displayReactMultipleInstances();
-                    if (hasReactScript) requestReactRouterData();
-                });
+            // 确保默认显示脚本控制面板
+            if (currentVueTab === 'scripts') {
+                switchVueTab('scripts');
             }
+        } else if (currentTab === 'headers') {
+            // 显示Headers板块
+            if (searchSection) searchSection.style.display = 'none';
+            if (hookNoticeContainer) hookNoticeContainer.style.display = 'none';
+            if (headersContent) headersContent.style.display = 'flex';
+            initHeadersPanel();
+        } else if (currentTab === 'mcp') {
+            // 显示MCP板块
+            if (searchSection) searchSection.style.display = 'none';
+            if (hookNoticeContainer) hookNoticeContainer.style.display = 'none';
+            if (mcpContent) mcpContent.style.display = 'flex';
         }
     }
 
@@ -905,37 +942,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isChildEnabled = enabledScripts.includes(childScript.id);
                     const childItem = createVueScriptItem(childScript, isChildEnabled, true);
                     vueScriptsList.appendChild(childItem);
-                });
-            }
-        });
-    }
-
-    // 渲染React脚本（横向列表，UI与Vue脚本相同）
-    function renderReactScripts(scripts) {
-        if (!reactScriptsList) return;
-        reactScriptsList.innerHTML = '';
-
-        const parentScripts = scripts.filter(script => !script.parentScript);
-
-        if (parentScripts.length === 0 && scripts.length === 0) {
-            reactScriptsList.innerHTML = '<div class="empty-state">暂无 React 脚本</div>';
-            return;
-        }
-
-        parentScripts.forEach(parentScript => {
-            if (typeof parentScript.id !== 'string' || !parentScript.id.trim()) return;
-
-            const isParentEnabled = enabledScripts.includes(parentScript.id) ||
-                scripts.some(s => s.parentScript === parentScript.id && enabledScripts.includes(s.id));
-            const parentItem = createVueScriptItem(parentScript, isParentEnabled, false);
-            reactScriptsList.appendChild(parentItem);
-
-            const childScripts = scripts.filter(s => s.parentScript === parentScript.id);
-            if (isParentEnabled && childScripts.length > 0) {
-                childScripts.forEach(childScript => {
-                    const isChildEnabled = enabledScripts.includes(childScript.id);
-                    const childItem = createVueScriptItem(childScript, isChildEnabled, true);
-                    reactScriptsList.appendChild(childItem);
                 });
             }
         });
@@ -1113,21 +1119,47 @@ document.addEventListener('DOMContentLoaded', () => {
         // 构建输入区域
         let inputArea = '';
         if (isFixedVariate) {
-            // 固定变量脚本：显示固定值输入
-            // 优先使用配置中的值，如果没有则使用scripts.json中的默认值
-            const value = config?.value || script.value || '';
-            inputArea = `
-                <div class="hook-input-group">
-                    <label class="hook-input-label">固定值：</label>
-                    <div class="hook-input-wrapper hook-value-input-wrapper">
-                        <input type="text" class="hook-value-input" 
-                               value="${value}" 
-                               placeholder="输入固定值后按Enter保存" 
-                               ${!isEnabled ? 'disabled' : ''}>
-                        <div class="hook-value-tooltip">输入固定值后按Enter保存</div>
+            // 特殊处理：flip_video 脚本有 scale 和 rotate 两个独立参数
+            if (script.id === 'flip_video') {
+                const scale = config?.value || script.value || '1.5';
+                const rotate = config?.rotate !== undefined ? config.rotate : 90;
+                inputArea = `
+                    <div class="hook-input-group hook-video-flip-group">
+                        <div class="hook-input-row">
+                            <label class="hook-input-label">scale（放大）：</label>
+                            <div class="hook-input-wrapper hook-value-input-wrapper">
+                                <input type="number" step="0.1" class="hook-value-input hook-scale-input"
+                                       value="${scale}" placeholder="1.5" ${!isEnabled ? 'disabled' : ''}>
+                                <div class="hook-value-tooltip">输入放大倍数，如 1.3</div>
+                            </div>
+                        </div>
+                        <div class="hook-input-row">
+                            <label class="hook-input-label">rotate（旋转角度）：</label>
+                            <div class="hook-input-wrapper hook-value-input-wrapper">
+                                <input type="number" class="hook-value-input hook-rotate-input"
+                                       value="${rotate}" placeholder="90" ${!isEnabled ? 'disabled' : ''}>
+                                <div class="hook-value-tooltip">输入旋转角度（度），如 85</div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            } else {
+                // 固定变量脚本：显示固定值输入
+                // 优先使用配置中的值，如果没有则使用scripts.json中的默认值
+                const value = config?.value || script.value || '';
+                inputArea = `
+                    <div class="hook-input-group">
+                        <label class="hook-input-label">固定值：</label>
+                        <div class="hook-input-wrapper hook-value-input-wrapper">
+                            <input type="text" class="hook-value-input"
+                                   value="${value}"
+                                   placeholder="输入固定值后按Enter保存"
+                                   ${!isEnabled ? 'disabled' : ''}>
+                            <div class="hook-value-tooltip">输入固定值后按Enter保存</div>
+                        </div>
+                    </div>
+                `;
+            }
         } else {
             // 非固定变量脚本
             if (hasParam) {
@@ -1222,20 +1254,43 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 固定值输入框事件（使用Enter键保存）
         if (isFixedVariate) {
+            // flip_video 脚本：独立处理 scale 和 rotate
+            if (script.id === 'flip_video') {
+                const scaleInput = scriptItem.querySelector('.hook-scale-input');
+                const rotateInput = scriptItem.querySelector('.hook-rotate-input');
+
+                function saveFlipConfig() {
+                    loadHookConfig(script.id).then(config => {
+                        if (scaleInput) config.value = scaleInput.value;
+                        if (rotateInput) config.rotate = parseInt(rotateInput.value) || 90;
+                        saveHookConfig(script.id, config);
+                        showToast('已保存');
+                    });
+                }
+
+                scaleInput.addEventListener('change', saveFlipConfig);
+                rotateInput.addEventListener('change', saveFlipConfig);
+                scaleInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') saveFlipConfig();
+                });
+                rotateInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') saveFlipConfig();
+                });
+            } else {
             const valueInput = scriptItem.querySelector('.hook-value-input');
             const tooltip = scriptItem.querySelector('.hook-value-tooltip');
             const inputWrapper = scriptItem.querySelector('.hook-value-input-wrapper');
-            
+
             // 获得焦点时显示提示框
             valueInput.addEventListener('focus', () => {
                 inputWrapper.classList.add('show-tooltip');
             });
-            
+
             // 失去焦点时隐藏提示框
             valueInput.addEventListener('blur', () => {
                 inputWrapper.classList.remove('show-tooltip');
             });
-            
+
             valueInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter' && isEnabled) {
                     const value = e.target.value.trim();
@@ -1250,6 +1305,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
+            }
         }
         
         // 关键字输入框事件（非固定变量且支持关键字）
@@ -1323,8 +1379,18 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.local.set({
             [configKey]: config
         }, () => {
-            // 🔧 修改：用户修改配置时只保存到chrome.storage.local，不发送消息
-            // 等下次刷新页面后，content.js会在页面加载时自动同步并发送消息
+            // 立即向 content.js 发送消息，由它在页面中执行翻转，实现即时生效
+            if (currentTab_obj && currentTab_obj.id) {
+                chrome.tabs.sendMessage(currentTab_obj.id, {
+                    type: 'HOOK_CONFIG_APPLY',
+                    scriptId,
+                    config
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.warn('[Popup] 发送 HOOK_CONFIG_APPLY 失败:', chrome.runtime.lastError.message);
+                    }
+                });
+            }
         });
     }
     
@@ -1506,7 +1572,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadHookConfig(script.id).then(config => {
                 const isFixedVariate = script.fixed_variate === 1;
                 const hasParam = script.has_Param === 1;
-                
+
                 // 固定变量脚本：如果配置中没有值，使用scripts.json中的默认值
                 if (isFixedVariate) {
                     // 检查scripts.json中是否有默认值
@@ -1515,12 +1581,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (config.value === undefined || config.value === '') {
                             config.value = script.value;
                             saveHookConfig(script.id, config);
-                            
-                            // 更新输入框显示
-                            const valueInput = scriptItem.querySelector('.hook-value-input');
-                            if (valueInput) {
-                                valueInput.value = script.value;
-                            }
+                        }
+                    }
+                    // flip_video 脚本：确保 rotate 有默认值
+                    if (script.id === 'flip_video') {
+                        if (config.rotate === undefined) {
+                            config.rotate = 90;
+                            saveHookConfig(script.id, config);
                         }
                     }
                 } else {
@@ -1651,568 +1718,305 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorageData[`${baseKey}_${key}`] = (config[key] || 0).toString();
             }
         });
-        
-        // 发送消息到content script同步
-        chrome.tabs.sendMessage(currentTab_obj.id, {
-            type: 'SYNC_HOOK_CONFIG',
-            scriptId: scriptId,
-            config: localStorageData
-        }).catch(err => {
-            console.warn('同步Hook配置失败:', err);
+
+        // 🔧 直接写入 localStorage，实现即时生效
+        Object.entries(localStorageData).forEach(([k, v]) => {
+            localStorage.setItem(k, v);
         });
+
+        // 发送 HOOK_CONFIG_READY 事件通知脚本应用配置
+        window.postMessage({
+            type: 'HOOK_CONFIG_READY',
+            source: 'antidebug-extension',
+            scriptIds: [scriptId]
+        }, '*');
     }
+
+    // 当前选中的Vue标签页
+    let currentVueTab = 'scripts';
 
     // 显示多个Vue实例（新增函数）
     function displayMultipleInstances() {
-        const instanceTabs = document.querySelector('.instance-tabs');
-        const tabsHeader = document.querySelector('.instance-tabs-header');
+        if (!vueTabsList) return;
+        
+        // 🔧 保存当前用户选择的标签，避免切换脚本时跳转
+        const previousTab = currentVueTab;
+        
+        // 清空除了"脚本控制"以外的标签
+        const existingTabs = vueTabsList.querySelectorAll('.vue-tab-item:not([data-vue-tab="scripts"])');
+        existingTabs.forEach(tab => tab.remove());
         
         // 没有数据
         if (!cachedVueDataList || cachedVueDataList.length === 0) {
-            instanceTabs.style.display = 'none';
+            if (vueEmptyHint) vueEmptyHint.style.display = 'flex';
+            if (vueRoutesPanel) vueRoutesPanel.style.display = 'none';
             displayVueRouterData(null);
             return;
         }
         
-        // 只有一个实例，隐藏标签页，保持原有UI
-        if (cachedVueDataList.length === 1) {
-            instanceTabs.style.display = 'none';
-            displayVueRouterData(cachedVueDataList[0]);
+        // 检查是否有有效的路由数据
+        const validInstances = cachedVueDataList.filter(d => d && !d.notFound && d.routes && d.routes.length > 0);
+        
+        if (validInstances.length === 0) {
+            // 没有有效路由数据，但可能有版本信息
+            if (vueEmptyHint) vueEmptyHint.style.display = 'flex';
+            if (vueRoutesPanel) vueRoutesPanel.style.display = 'none';
+            displayVueRouterData(cachedVueDataList[0]); // 尝试显示第一个实例（可能有版本信息）
             return;
         }
         
-        // 多实例场景：显示标签页
-        instanceTabs.style.display = 'block';
+        if (vueEmptyHint) vueEmptyHint.style.display = 'none';
         
-        // 生成标签按钮
-        tabsHeader.innerHTML = '';
+        // 🆕 只有一个有效实例时，直接显示路由列表，不需要点击标签
+        if (validInstances.length === 1) {
+            // 创建路由列表标签
+            const firstValidIndex = cachedVueDataList.findIndex(d => d && !d.notFound && d.routes && d.routes.length > 0);
+            const instance = cachedVueDataList[firstValidIndex];
+            const routeCount = instance.routes.length;
+            
+            // 🔧 根据用户当前选择决定标签的激活状态
+            const shouldActivateRoutes = previousTab !== 'scripts';
+            
+            const tabBtn = document.createElement('button');
+            tabBtn.className = `vue-tab-item ${shouldActivateRoutes ? 'active' : ''}`;
+            tabBtn.dataset.vueTab = `instance-${firstValidIndex}`;
+            tabBtn.dataset.instanceIndex = firstValidIndex;
+            tabBtn.innerHTML = `
+                <span>路由列表</span>
+                <span class="tab-badge">${routeCount}</span>
+            `;
+            tabBtn.onclick = () => switchVueTab(`instance-${firstValidIndex}`, firstValidIndex);
+            vueTabsList.appendChild(tabBtn);
+            
+            // 🔧 更新脚本控制标签的激活状态
+            const scriptsTab = vueTabsList.querySelector('[data-vue-tab="scripts"]');
+            if (scriptsTab) {
+                scriptsTab.classList.toggle('active', previousTab === 'scripts');
+            }
+            
+            // 🔧 根据用户当前选择决定显示哪个面板
+            if (previousTab === 'scripts') {
+                // 保持在脚本控制面板
+                if (vueScriptsPanel) {
+                    vueScriptsPanel.classList.add('active');
+                    vueScriptsPanel.style.display = 'flex';
+                }
+                if (vueRoutesPanel) {
+                    vueRoutesPanel.classList.remove('active');
+                    vueRoutesPanel.style.display = 'none';
+                }
+                currentVueTab = 'scripts';
+            } else {
+                // 显示路由面板
+                if (vueScriptsPanel) {
+                    vueScriptsPanel.classList.remove('active');
+                    vueScriptsPanel.style.display = 'none';
+                }
+                if (vueRoutesPanel) {
+                    vueRoutesPanel.classList.add('active');
+                    vueRoutesPanel.style.display = 'flex';
+                }
+                currentVueTab = `instance-${firstValidIndex}`;
+                currentInstanceIndex = firstValidIndex;
+                displayVueRouterData(instance);
+            }
+            return;
+        }
+        
+        // 多实例场景：为每个有效实例生成标签
         cachedVueDataList.forEach((instance, index) => {
-            const tabBtn = document.createElement('button');
-            tabBtn.className = `instance-tab-btn ${index === currentInstanceIndex ? 'active' : ''}`;
+            if (!instance || instance.notFound || !instance.routes || instance.routes.length === 0) {
+                return;
+            }
             
-            const routeCount = instance.routes?.length || 0;
+            const routeCount = instance.routes.length;
+            const tabBtn = document.createElement('button');
+            tabBtn.className = 'vue-tab-item';
+            tabBtn.dataset.vueTab = `instance-${index}`;
+            tabBtn.dataset.instanceIndex = index;
+            
             tabBtn.innerHTML = `
-                <div class="instance-tab-title">实例 ${index + 1}</div>
-                <div class="instance-tab-subtitle">Vue ${instance.vueVersion} · ${routeCount} 路由</div>
+                <span>实例 ${index + 1}</span>
+                <span class="tab-badge">${routeCount}</span>
             `;
             
-            tabBtn.onclick = () => {
-                // 更新激活状态
-                document.querySelectorAll('.instance-tab-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                tabBtn.classList.add('active');
-                
-                // 更新当前索引并显示
-                currentInstanceIndex = index;
-                displayVueRouterData(cachedVueDataList[index]);
-            };
-            
-            tabsHeader.appendChild(tabBtn);
+            tabBtn.onclick = () => switchVueTab(`instance-${index}`, index);
+            vueTabsList.appendChild(tabBtn);
         });
         
-        // 显示当前选中的实例
-        displayVueRouterData(cachedVueDataList[currentInstanceIndex]);
-    }
-
-    function getReactInstanceKey(instance, index) {
-        if (!instance) return `react-${index}`;
-        return instance.rootId || instance.containerPath || instance.source || instance.instanceId || `react-${index}`;
-    }
-
-    function getReactInstanceLabel(instance, index) {
-        const rawLabel = getReactInstanceKey(instance, index);
-        return String(rawLabel)
-            .replace(/^document\./, '')
-            .replace(/^getElementById/, 'id')
-            .replace(/^querySelector/, 'selector');
-    }
-
-    function getReactLastOpenedRouteStorageKey() {
-        return `${hostname}_react_last_opened_route`;
-    }
-
-    function normalizeReactRoutePath(path) {
-        if (!path || typeof path !== 'string') return '';
-        let normalized = path.trim();
-        if (!normalized) return '';
-        const queryIndex = normalized.search(/[?#]/);
-        if (queryIndex >= 0) normalized = normalized.slice(0, queryIndex);
-        if (!normalized.startsWith('/')) normalized = '/' + normalized;
-        if (normalized.length > 1 && normalized.endsWith('/')) normalized = normalized.slice(0, -1);
-        return normalized;
-    }
-
-    function getReactRoutePathFromUrl(url) {
-        if (!url || typeof url !== 'string') return '';
-        try {
-            const parsed = new URL(url);
-            if (parsed.hash) {
-                const hashPath = parsed.hash.replace(/^#/, '');
-                if (hashPath && hashPath !== '/') return normalizeReactRoutePath(hashPath);
+        // 🔧 根据用户当前选择决定是否自动切换到路由面板
+        const firstValidIndex = cachedVueDataList.findIndex(d => d && !d.notFound && d.routes && d.routes.length > 0);
+        if (firstValidIndex >= 0) {
+            if (previousTab === 'scripts') {
+                // 🔧 用户在脚本控制面板，保持不动
+                const scriptsTab = vueTabsList.querySelector('[data-vue-tab="scripts"]');
+                if (scriptsTab) scriptsTab.classList.add('active');
+                
+                if (vueScriptsPanel) {
+                    vueScriptsPanel.classList.add('active');
+                    vueScriptsPanel.style.display = 'flex';
+                }
+                if (vueRoutesPanel) {
+                    vueRoutesPanel.classList.remove('active');
+                    vueRoutesPanel.style.display = 'none';
+                }
+                currentVueTab = 'scripts';
+            } else {
+                // 激活第一个标签
+                const firstTab = vueTabsList.querySelector(`[data-vue-tab="instance-${firstValidIndex}"]`);
+                if (firstTab) firstTab.classList.add('active');
+                
+                // 显示路由面板
+                if (vueScriptsPanel) {
+                    vueScriptsPanel.classList.remove('active');
+                    vueScriptsPanel.style.display = 'none';
+                }
+                if (vueRoutesPanel) {
+                    vueRoutesPanel.classList.add('active');
+                    vueRoutesPanel.style.display = 'flex';
+                }
+                
+                currentVueTab = `instance-${firstValidIndex}`;
+                currentInstanceIndex = firstValidIndex;
+                displayVueRouterData(cachedVueDataList[firstValidIndex]);
             }
-            return normalizeReactRoutePath(parsed.pathname);
-        } catch (e) {
-            const hashIndex = url.indexOf('#');
-            if (hashIndex >= 0) {
-                return normalizeReactRoutePath(url.slice(hashIndex + 1));
+        }
+    }
+    
+    // 切换Vue标签页
+    function switchVueTab(tabId, instanceIndex = null) {
+        currentVueTab = tabId;
+        
+        // 更新标签激活状态
+        if (vueTabsList) {
+            vueTabsList.querySelectorAll('.vue-tab-item').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.vueTab === tabId);
+            });
+        }
+        
+        // 切换面板
+        if (tabId === 'scripts') {
+            if (vueScriptsPanel) {
+                vueScriptsPanel.classList.add('active');
+                vueScriptsPanel.style.display = 'flex';
             }
-            return normalizeReactRoutePath(url);
+            if (vueRoutesPanel) {
+                vueRoutesPanel.classList.remove('active');
+                vueRoutesPanel.style.display = 'none';
+            }
+            if (vueEmptyHint) vueEmptyHint.style.display = 'none';
+        } else if (tabId.startsWith('instance-') && instanceIndex !== null) {
+            if (vueScriptsPanel) {
+                vueScriptsPanel.classList.remove('active');
+                vueScriptsPanel.style.display = 'none';
+            }
+            if (vueRoutesPanel) {
+                vueRoutesPanel.classList.add('active');
+                vueRoutesPanel.style.display = 'flex';
+            }
+            if (vueEmptyHint) vueEmptyHint.style.display = 'none';
+            
+            currentInstanceIndex = instanceIndex;
+            if (cachedVueDataList[instanceIndex]) {
+                displayVueRouterData(cachedVueDataList[instanceIndex]);
+            }
         }
     }
-
-    function normalizeReactLastOpenedRoute(value) {
-        if (!value) return null;
-        if (typeof value === 'string') {
-            return {
-                url: value,
-                routePath: getReactRoutePathFromUrl(value)
-            };
+    
+    // 初始化Vue标签页点击事件
+    function initVueTabsEvents() {
+        if (!vueTabsList) return;
+        
+        const scriptsTab = vueTabsList.querySelector('[data-vue-tab="scripts"]');
+        if (scriptsTab) {
+            scriptsTab.onclick = () => switchVueTab('scripts');
         }
-        if (typeof value === 'object' && typeof value.url === 'string') {
-            return {
-                ...value,
-                routePath: normalizeReactRoutePath(value.routePath) || getReactRoutePathFromUrl(value.url)
-            };
-        }
-        return null;
     }
-
-    function findReactRouteItemByLastOpened(container, lastOpenedRoute) {
-        if (!container || !lastOpenedRoute) return null;
-
-        return Array.from(container.querySelectorAll('.route-item')).find(item => {
-            const openBtn = item.querySelector('.open-btn');
-            if (!openBtn) return false;
-            if (openBtn.dataset.url === lastOpenedRoute.url) return true;
-            return Boolean(lastOpenedRoute.routePath) &&
-                normalizeReactRoutePath(openBtn.dataset.routePath || '') === lastOpenedRoute.routePath;
-        }) || null;
-    }
-
-    function scrollReactRouteItemIntoView(routeItem) {
-        if (!routeItem) return;
-
-        const scrollContainer = routeItem.closest('.vue-content') || routeItem.closest('.react-sub-content');
-        if (scrollContainer && typeof scrollContainer.scrollTop === 'number') {
-            const itemRect = routeItem.getBoundingClientRect();
-            const containerRect = scrollContainer.getBoundingClientRect();
-            const targetTop = scrollContainer.scrollTop + itemRect.top - containerRect.top -
-                Math.max(0, (containerRect.height - itemRect.height) / 2);
-            scrollContainer.scrollTop = Math.max(0, targetTop);
-        }
-
-        routeItem.scrollIntoView({
-            behavior: 'auto',
-            block: 'center'
-        });
-    }
-
-    function scheduleReactLastOpenedRouteRestore(reactRouterInfo, routesListContainer, routeSearchInput) {
-        if (hasRestoredReactLastOpenedRoute && Date.now() > reactLastOpenedRouteRestoreDeadline) return;
-        if (!isFirstReactDataDisplay && !hasRestoredReactLastOpenedRoute) return;
-        if (!reactRouterInfo || !reactRouterInfo.routes || reactRouterInfo.routes.length === 0) return;
+    
+    // 初始化
+    initVueTabsEvents();
+    
+    // 🆕 全局路由渲染函数（供搜索使用）
+    function renderVueRoutesGlobal(routesToShow) {
         if (!routesListContainer) return;
-        if (routeSearchInput && routeSearchInput.value.trim() !== '') return;
-
-        const storageKey = getReactLastOpenedRouteStorageKey();
-        chrome.storage.local.get([storageKey], (result) => {
-            const lastOpenedRoute = normalizeReactLastOpenedRoute(result[storageKey]);
-            if (!lastOpenedRoute || !lastOpenedRoute.url) {
-                isFirstReactDataDisplay = false;
-                return;
-            }
-
-            const hasStoredRootInCurrentData = lastOpenedRoute.rootId && cachedReactDataList.some(instance => {
-                return instance && instance.rootId === lastOpenedRoute.rootId;
-            });
-            if (hasStoredRootInCurrentData && reactRouterInfo.rootId && lastOpenedRoute.rootId !== reactRouterInfo.rootId) {
-                return;
-            }
-
-            if (reactLastOpenedRouteRestoreTimer) {
-                clearTimeout(reactLastOpenedRouteRestoreTimer);
-                reactLastOpenedRouteRestoreTimer = null;
-            }
-
-            reactLastOpenedRouteRestoreTimer = setTimeout(() => {
-                reactLastOpenedRouteRestoreTimer = null;
-                const targetRouteItem = findReactRouteItemByLastOpened(routesListContainer, lastOpenedRoute);
-                if (!targetRouteItem) return;
-
-                scrollReactRouteItemIntoView(targetRouteItem);
-                targetRouteItem.classList.add('highlight-last-opened');
-                setTimeout(() => {
-                    targetRouteItem.classList.remove('highlight-last-opened');
-                }, 2000);
-
-                hasRestoredReactLastOpenedRoute = true;
-                isFirstReactDataDisplay = false;
-            }, 160);
-        });
-    }
-
-    function setCachedReactRouterData(data) {
-        const previous = cachedReactDataList[currentReactInstanceIndex];
-        const previousKey = previous ? getReactInstanceKey(previous, currentReactInstanceIndex) : null;
-
-        cachedReactData = data || null;
-        if (!data) {
-            cachedReactDataList = [];
-            currentReactInstanceIndex = 0;
-            return;
-        }
-
-        const rawInstances = Array.isArray(data.instances) && data.instances.length > 0
-            ? data.instances.filter(Boolean)
-            : [data];
-        const instances = [];
-        const seenRootIds = new Set();
-        rawInstances.forEach(instance => {
-            const rootId = instance && instance.rootId;
-            if (rootId) {
-                if (seenRootIds.has(rootId)) return;
-                seenRootIds.add(rootId);
-            }
-            instances.push(instance);
-        });
-
-        cachedReactDataList = instances;
-        if (previousKey) {
-            const matchedIndex = cachedReactDataList.findIndex((instance, index) => {
-                return getReactInstanceKey(instance, index) === previousKey;
-            });
-            currentReactInstanceIndex = matchedIndex >= 0 ? matchedIndex : 0;
-        } else if (currentReactInstanceIndex >= cachedReactDataList.length) {
-            currentReactInstanceIndex = 0;
-        }
-    }
-
-    function displayReactMultipleInstances() {
-        const instanceTabs = document.querySelector('.react-instance-tabs');
-        const tabsHeader = document.querySelector('.react-instance-tabs-header');
-
-        if (!cachedReactDataList || cachedReactDataList.length === 0) {
-            if (instanceTabs) instanceTabs.style.display = 'none';
-            displayReactRouterData(cachedReactData);
-            return;
-        }
-
-        if (!tabsHeader || !instanceTabs || cachedReactDataList.length === 1) {
-            if (instanceTabs) instanceTabs.style.display = 'none';
-            currentReactInstanceIndex = 0;
-            displayReactRouterData(cachedReactDataList[0]);
-            return;
-        }
-
-        if (currentReactInstanceIndex >= cachedReactDataList.length) {
-            currentReactInstanceIndex = 0;
-        }
-
-        if (!hasRestoredReactInstanceSelection) {
-            hasRestoredReactInstanceSelection = true;
-            const storageKey = getReactLastOpenedRouteStorageKey();
-            chrome.storage.local.get([storageKey], (result) => {
-                const lastOpenedRoute = normalizeReactLastOpenedRoute(result[storageKey]);
-                if (!lastOpenedRoute || !lastOpenedRoute.rootId) return;
-
-                const matchedIndex = cachedReactDataList.findIndex(instance => {
-                    return instance && instance.rootId === lastOpenedRoute.rootId;
-                });
-
-                if (matchedIndex >= 0 && matchedIndex !== currentReactInstanceIndex) {
-                    currentReactInstanceIndex = matchedIndex;
-                    displayReactMultipleInstances();
-                }
-            });
-        }
-
-        instanceTabs.style.display = 'block';
-        tabsHeader.innerHTML = '';
-
-        cachedReactDataList.forEach((instance, index) => {
-            const tabBtn = document.createElement('button');
-            tabBtn.className = `instance-tab-btn ${index === currentReactInstanceIndex ? 'active' : ''}`;
-            tabBtn.type = 'button';
-
-            const routeCount = Array.isArray(instance.routes) ? instance.routes.length : 0;
-            const modeLabel = instance.routerMode || instance.routerType || 'React';
-            const title = getReactInstanceLabel(instance, index);
-            tabBtn.title = `${title} | ${routeCount} routes`;
-            tabBtn.innerHTML = `
-                <div class="instance-tab-title">实例 ${index + 1}</div>
-                <div class="instance-tab-subtitle">${modeLabel} · ${routeCount} 路由</div>
-            `;
-
-            tabBtn.onclick = () => {
-                tabsHeader.querySelectorAll('.instance-tab-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                tabBtn.classList.add('active');
-                currentReactInstanceIndex = index;
-                displayReactRouterData(cachedReactDataList[index]);
-            };
-
-            tabsHeader.appendChild(tabBtn);
-        });
-
-        displayReactRouterData(cachedReactDataList[currentReactInstanceIndex]);
-    }
-
-    // 显示 React Router 数据
-    function displayReactRouterData(reactRouterInfo) {
-        const reactRoutesInfoBar = document.querySelector('.react-routes-info-bar');
-        const reactRouteSearchContainer = document.querySelector('.react-route-search-container');
-        const reactRoutesListContainer = document.querySelector('.react-routes-list-container');
-        const reactRoutesActionsFooter = document.querySelector('.react-routes-actions-footer');
-        const reactRouteSearchInput = document.getElementById('react-route-search-input');
-        const reactCopyAllPathsBtn = document.querySelector('.react-copy-all-paths-btn');
-        const reactCopyAllUrlsBtn = document.querySelector('.react-copy-all-urls-btn');
-        const reactBaseInputContainer = document.querySelector('.react-route-base-input-container');
-
-        if (!reactRoutesListContainer) return;
-
-        // URL 清理：去多余斜杠和尾部斜杠
-        const cleanUrl = (url) => url.replace(/([^:]\/)\/+/g, '$1').replace(/\/$/, '');
-
-        // 默认隐藏可选区域
-        if (reactRoutesInfoBar) reactRoutesInfoBar.style.display = 'none';
-        if (reactRouteSearchContainer) reactRouteSearchContainer.style.display = 'none';
-        if (reactRoutesActionsFooter) reactRoutesActionsFooter.style.display = 'none';
-        if (reactBaseInputContainer) reactBaseInputContainer.style.display = 'none';
-
-        if (!reactRouterInfo) {
-            reactRoutesListContainer.innerHTML = '<div class="empty-state">等待检测 React Router（如需检测请打开<strong>获取路由</strong>并刷新网站）</div>';
-            return;
-        }
-
-        if (reactRouterInfo.notFound) {
-            reactRoutesListContainer.innerHTML = '<div class="empty-state">❌ 未检测到 React Router（可尝试重新打开插件）</div>';
-            return;
-        }
-
-        if (reactRouterInfo.serializationError) {
-            reactRoutesListContainer.innerHTML = '<div class="empty-state">❌ 路由数据传输失败，请查看控制台（F12）输出的路由信息！</div>';
-            return;
-        }
-
-        const allRoutes = reactRouterInfo.routes;
-        if (!allRoutes || allRoutes.length === 0) {
-            reactRoutesListContainer.innerHTML = '<div class="empty-state">⚠️ 路由表为空</div>';
-            return;
-        }
-
-        if (reactRoutesInfoBar) reactRoutesInfoBar.style.display = 'flex';
-        if (reactRouteSearchContainer) reactRouteSearchContainer.style.display = 'flex';
-        if (reactRoutesActionsFooter) reactRoutesActionsFooter.style.display = 'flex';
-
-        const routerMode = reactRouterInfo.routerMode ?? null;
-        let baseUrl = window.location.origin;
-        if (currentTab_obj && currentTab_obj.url) {
-            try { baseUrl = new URL(currentTab_obj.url).origin; } catch (e) {}
-        }
-
-        // ===== Base URL 处理（参照 Vue 板块逻辑）=====
-        const detectedBase = reactRouterInfo.routerBase || '';
-        let shouldShowBaseInput = false;
-        let cleanDetectedBase = '';
-
-        if (detectedBase.trim() !== '') {
-            if (detectedBase.startsWith('http://') || detectedBase.startsWith('https://') || detectedBase.includes('#')) {
-                console.warn('[AntiDebug] React 检测到的 basename 无效，已忽略:', detectedBase);
-            } else {
-                cleanDetectedBase = detectedBase.endsWith('/') ? detectedBase.slice(0, -1) : detectedBase;
-                if (cleanDetectedBase !== '/' && cleanDetectedBase !== '') {
-                    shouldShowBaseInput = true;
-                }
-            }
-        }
-
-        let currentCustomBase = ''; // 当前用户输入/存储的 base
-
-        // 构建完整 URL（含 base 处理）
-        function buildFullUrl(normalizedPath) {
-            const baseUrlWithoutTrailingSlash = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-            const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.substring(1) : normalizedPath;
-
-            if (currentCustomBase && currentCustomBase.trim() !== '') {
-                const cleanBase = currentCustomBase.endsWith('/') ? currentCustomBase.slice(0, -1) : currentCustomBase;
-                if (routerMode === 'hash') {
-                    return `${baseUrlWithoutTrailingSlash}${cleanBase}/#/${cleanPath}`;
+        routesListContainer.innerHTML = '';
+        
+        // 路径规范化函数
+        const normalizePath = (path) => {
+            if (!path || path.trim() === '') return '/';
+            if (!path.startsWith('/')) return '/' + path;
+            return path;
+        };
+        
+        // URL清理函数
+        const cleanUrl = (url) => {
+            return url.replace(/([^:]\/)\/+/g, '$1').replace(/\/$/, '');
+        };
+        
+        routesToShow.forEach(route => {
+            const normalizedPath = normalizePath(route.path);
+            let fullUrl;
+            
+            // 使用全局变量构建URL
+            if (currentCustomBaseValue && currentCustomBaseValue.trim() !== '') {
+                const cleanBase = currentCustomBaseValue.endsWith('/') ? currentCustomBaseValue.slice(0, -1) : currentCustomBaseValue;
+                if (currentVueRouterMode === 'hash') {
+                    const baseUrlWithoutHash = currentVueBaseUrl.endsWith('#') ? currentVueBaseUrl.slice(0, -1) : currentVueBaseUrl;
+                    fullUrl = cleanUrl(baseUrlWithoutHash + cleanBase + '/#' + normalizedPath);
                 } else {
-                    return cleanUrl(baseUrl + cleanBase + normalizedPath);
+                    fullUrl = cleanUrl(currentVueBaseUrl + cleanBase + normalizedPath);
                 }
             } else {
-                if (routerMode === 'hash') {
-                    return `${baseUrlWithoutTrailingSlash}/#/${cleanPath}`;
-                } else {
-                    return baseUrl + normalizedPath;
-                }
-            }
-        }
-
-        // 渲染路由列表（按完整 URL 去重）
-        function renderRoutes(routesToShow) {
-            reactRoutesListContainer.innerHTML = '';
-            const seenUrls = new Set();
-            routesToShow.forEach(route => {
-                const rawPath = route.path || '/';
-                const normalizedPath = rawPath.startsWith('/') ? rawPath : '/' + rawPath;
-                const fullUrl = buildFullUrl(normalizedPath);
-                const routePath = normalizeReactRoutePath(normalizedPath);
-                if (seenUrls.has(fullUrl)) return;
-                seenUrls.add(fullUrl);
-
-                const routeItem = document.createElement('div');
-                routeItem.className = 'route-item';
-                routeItem.innerHTML = `
-                    <div class="route-url" title="${fullUrl}">${fullUrl}</div>
-                    <div class="route-actions">
-                        <button class="route-btn copy-btn" data-url="${fullUrl}">复制</button>
-                        <button class="route-btn open-btn" data-url="${fullUrl}" data-route-path="${routePath}">打开</button>
-                    </div>
-                `;
-
-                routeItem.querySelector('.copy-btn').addEventListener('click', () => {
-                    navigator.clipboard.writeText(fullUrl).then(() => {
-                        const btn = routeItem.querySelector('.copy-btn');
-                        btn.textContent = '✓ 已复制';
-                        setTimeout(() => { btn.textContent = '复制'; }, 1500);
-                    }).catch(err => console.error('复制失败:', err));
-                });
-
-                routeItem.querySelector('.open-btn').addEventListener('click', () => {
-                    freezeReactRouteDisplayAfterNavigation = true;
-                    const openRoute = () => {
-                        chrome.tabs.update(currentTab_obj.id, { url: fullUrl });
-                    };
-                    if (reactRouterInfo && reactRouterInfo.routes && reactRouterInfo.routes.length > 0) {
-                        chrome.storage.local.set({
-                            [getReactLastOpenedRouteStorageKey()]: {
-                                url: fullUrl,
-                                routePath,
-                                rootId: reactRouterInfo.rootId || '',
-                                containerPath: reactRouterInfo.containerPath || '',
-                                timestamp: Date.now()
-                            }
-                        }, openRoute);
+                if (currentVueRouterMode === 'hash') {
+                    const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.substring(1) : normalizedPath;
+                    if (currentVueBaseUrl.endsWith('#')) {
+                        fullUrl = currentVueBaseUrl + '/' + cleanPath;
+                    } else if (currentVueBaseUrl.endsWith('#/')) {
+                        fullUrl = currentVueBaseUrl + cleanPath;
                     } else {
-                        openRoute();
+                        fullUrl = currentVueBaseUrl + '#/' + cleanPath;
                     }
+                    fullUrl = cleanUrl(fullUrl);
+                } else {
+                    fullUrl = currentVueBaseUrl + normalizedPath;
+                }
+            }
+            
+            const routeItem = document.createElement('div');
+            routeItem.className = 'route-item';
+            routeItem.innerHTML = `
+                <div class="route-url" title="${fullUrl}">${fullUrl}</div>
+                <div class="route-actions">
+                    <button class="route-btn copy-btn" data-url="${fullUrl}">复制</button>
+                    <button class="route-btn open-btn" data-url="${fullUrl}">打开</button>
+                </div>
+            `;
+            
+            // 绑定事件
+            const copyBtn = routeItem.querySelector('.copy-btn');
+            const openBtn = routeItem.querySelector('.open-btn');
+            
+            copyBtn.onclick = () => {
+                navigator.clipboard.writeText(fullUrl).then(() => {
+                    copyBtn.textContent = '已复制';
+                    copyBtn.style.background = 'var(--success)';
+                    setTimeout(() => {
+                        copyBtn.textContent = '复制';
+                        copyBtn.style.background = '';
+                    }, 1500);
                 });
-
-                reactRoutesListContainer.appendChild(routeItem);
-            });
-
-            scheduleReactLastOpenedRouteRestore(reactRouterInfo, reactRoutesListContainer, reactRouteSearchInput);
-        }
-
-        // 渲染并更新信息头计数（去重后的真实数量）
-        function renderRoutesAndUpdateCount(routesToShow) {
-            renderRoutes(routesToShow);
-            const reactRoutesInfo = document.querySelector('.react-routes-info');
-            if (reactRoutesInfo) {
-                const renderedCount = reactRoutesListContainer.querySelectorAll('.route-item').length;
-                reactRoutesInfo.innerHTML = `完整路由列表 (<span class="highlight">${routerMode}</span> 模式) -- <span class="highlight">${renderedCount}</span> 条路由`;
-            }
-        }
-
-        // 搜索时重渲染
-        function renderRoutesWithSearch() {
-            const term = (reactRouteSearchInput ? reactRouteSearchInput.value : '').toLowerCase().trim();
-            if (term) {
-                const filtered = allRoutes.filter(r =>
-                    (r.path || '').toLowerCase().includes(term) || (r.name || '').toLowerCase().includes(term)
-                );
-                renderRoutesAndUpdateCount(filtered);
-            } else {
-                renderRoutesAndUpdateCount(allRoutes);
-            }
-        }
-
-        // ===== Base URL 输入区 =====
-        if (shouldShowBaseInput && reactBaseInputContainer) {
-            reactBaseInputContainer.style.display = 'flex';
-            const detectedBaseValue = reactBaseInputContainer.querySelector('.react-detected-base-value');
-            const applyBtn = reactBaseInputContainer.querySelector('.react-apply-detected-base-btn');
-            const customInput = document.getElementById('react-custom-base-input');
-            const clearBtn = reactBaseInputContainer.querySelector('.react-clear-base-btn');
-
-            if (detectedBaseValue) detectedBaseValue.textContent = cleanDetectedBase;
-
-            // 从 storage 恢复自定义 base
-            const storageKey = `${hostname}_react_custom_base`;
-            chrome.storage.local.get([storageKey], (result) => {
-                currentCustomBase = result[storageKey] || '';
-                if (customInput) customInput.value = currentCustomBase;
-                renderRoutesWithSearch();
-            });
-
-            if (applyBtn) {
-                applyBtn.onclick = () => {
-                    currentCustomBase = cleanDetectedBase;
-                    if (customInput) customInput.value = currentCustomBase;
-                    chrome.storage.local.set({ [storageKey]: currentCustomBase });
-                    renderRoutesWithSearch();
-                };
-            }
-            if (clearBtn) {
-                clearBtn.onclick = () => {
-                    currentCustomBase = '';
-                    if (customInput) customInput.value = '';
-                    chrome.storage.local.set({ [storageKey]: '' });
-                    renderRoutesWithSearch();
-                };
-            }
-            if (customInput) {
-                customInput.oninput = (e) => {
-                    currentCustomBase = e.target.value.trim();
-                    chrome.storage.local.set({ [storageKey]: currentCustomBase });
-                    renderRoutesWithSearch();
-                };
-            }
-        } else {
-            renderRoutesAndUpdateCount(allRoutes);
-        }
-
-        // 搜索框
-        if (reactRouteSearchInput) {
-            reactRouteSearchInput.value = '';
-            reactRouteSearchInput.oninput = renderRoutesWithSearch;
-        }
-
-        // 批量复制路径
-        if (reactCopyAllPathsBtn) {
-            reactCopyAllPathsBtn.onclick = () => {
-                const text = allRoutes.map(r => {
-                    const p = r.path || '/';
-                    const normalizedPath = p.startsWith('/') ? p : '/' + p;
-                    if (currentCustomBase && currentCustomBase.trim() !== '') {
-                        const cleanBase = currentCustomBase.endsWith('/') ? currentCustomBase.slice(0, -1) : currentCustomBase;
-                        return cleanBase + normalizedPath;
-                    }
-                    return normalizedPath;
-                }).join('\n');
-                navigator.clipboard.writeText(text).then(() => {
-                    reactCopyAllPathsBtn.textContent = '✓ 已复制';
-                    setTimeout(() => { reactCopyAllPathsBtn.textContent = '复制所有路径'; }, 1500);
-                }).catch(err => console.error('复制失败:', err));
             };
-        }
-
-        // 批量复制完整 URL
-        if (reactCopyAllUrlsBtn) {
-            reactCopyAllUrlsBtn.onclick = () => {
-                const text = allRoutes.map(r => {
-                    const p = r.path || '/';
-                    const normalizedPath = p.startsWith('/') ? p : '/' + p;
-                    return buildFullUrl(normalizedPath);
-                }).join('\n');
-                navigator.clipboard.writeText(text).then(() => {
-                    reactCopyAllUrlsBtn.textContent = '✓ 已复制';
-                    setTimeout(() => { reactCopyAllUrlsBtn.textContent = '复制所有URL'; }, 1500);
-                }).catch(err => console.error('复制失败:', err));
+            
+            openBtn.onclick = () => {
+                chrome.tabs.create({ url: fullUrl });
             };
+            
+            routesListContainer.appendChild(routeItem);
+        });
+        
+        // 显示空状态
+        if (routesToShow.length === 0) {
+            routesListContainer.innerHTML = '<div class="empty-state">没有匹配的路由</div>';
         }
     }
 
@@ -2237,51 +2041,49 @@ document.addEventListener('DOMContentLoaded', () => {
             return url.replace(/([^:]\/)\/+/g, '$1').replace(/\/$/, '');
         };
 
-        // 默认隐藏搜索框和底部按钮
-        const routeBaseInputContainer = document.querySelector('.route-base-input-container');
-        if (vueRouteSearchContainer) {
-            vueRouteSearchContainer.style.display = 'none';
+        // 默认隐藏工具栏和内联信息
+        if (routeToolbar) {
+            routeToolbar.style.display = 'none';
         }
-        if (routesActionsFooter) {
-            routesActionsFooter.style.display = 'none';
-        }
-        if (routeBaseInputContainer) {
-            routeBaseInputContainer.style.display = 'none';
+        if (vueInlineInfo) {
+            vueInlineInfo.style.display = 'none';
         }
 
         if (!vueRouterInfo) {
             routesListContainer.innerHTML = '<div class="empty-state">等待检测 Vue Router（如需检测请打开<strong>获取路由</strong>并刷新网站）</div>';
-            vueVersionDisplay.style.display = 'none';
             return;
         }
 
         // 未找到Router
         if (vueRouterInfo.notFound) {
             routesListContainer.innerHTML = '<div class="empty-state">❌ 未检测到 Vue Router（可尝试重新打开插件）</div>';
-            vueVersionDisplay.style.display = 'none';
             return;
         }
 
         // ✅ 新增：序列化错误处理
         if (vueRouterInfo.serializationError) {
             routesListContainer.innerHTML = '<div class="empty-state">❌ 路由数据传输失败，请查看控制台（F12）输出的路由信息！</div>';
-            vueVersionDisplay.style.display = 'none';
             return;
         }
 
-        // 显示Vue版本和路由信息
+        // 显示Vue版本和路由信息（内联到标签栏）
         if (vueRouterInfo.vueVersion) {
-            vueVersionDisplay.style.display = 'flex';
-            versionValue.textContent = vueRouterInfo.vueVersion;
+            // 更新新的内联版本显示
+            if (vueVersionInline) vueVersionInline.textContent = vueRouterInfo.vueVersion;
+            // 兼容旧版本显示
+            if (versionValue) versionValue.textContent = vueRouterInfo.vueVersion;
 
-            // 显示路由信息到左侧
-            const routesInfo = vueVersionDisplay.querySelector('.routes-info');
+            // 显示内联信息
+            if (vueInlineInfo) {
+                vueInlineInfo.style.display = 'flex';
+                if (routesModeInfo) {
             if (!vueRouterInfo.routes || vueRouterInfo.routes.length === 0) {
-                routesInfo.textContent = '路由表为空';
+                        routesModeInfo.textContent = '路由表为空';
             } else {
                 const routerMode = vueRouterInfo.routerMode || 'history';
-                const routeCount = vueRouterInfo.routes.length;
-                routesInfo.innerHTML = `完整URL列表 (<span class="highlight">${routerMode}</span> 模式) -- <span class="highlight">${routeCount}</span> 条路由`;
+                        routesModeInfo.textContent = `${routerMode}模式`;
+                    }
+                }
             }
         }
 
@@ -2291,14 +2093,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 显示搜索框和底部按钮（有路由时才显示）
-        vueRouteSearchContainer.style.display = 'flex';
-        routesActionsFooter.style.display = 'flex';
+        // 显示工具栏（有路由时才显示）
+        if (routeToolbar) routeToolbar.style.display = 'flex';
 
         let baseUrl = vueRouterInfo.baseUrl || window.location.origin;
         const routerMode = vueRouterInfo.routerMode || 'history';
         const detectedBase = vueRouterInfo.routerBase || ''; // 检测到的base（只用于显示）
         const allRoutes = vueRouterInfo.routes;
+        
+        // 🆕 设置全局变量供搜索使用
+        currentVueRoutes = allRoutes;
+        currentVueBaseUrl = baseUrl;
+        currentVueRouterMode = routerMode;
 
         // ✅ 从当前标签页URL提取真实的baseUrl（包含子路径和#）
         if (currentTab_obj && currentTab_obj.url) {
@@ -2332,83 +2138,182 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // ✅ 自定义base逻辑
+        // ✅ 自定义base逻辑（使用下拉选择框）
+        const baseSelect = document.getElementById('base-select');
+        const baseCount = document.querySelector('.route-toolbar .base-count');
         const customBaseInput = document.getElementById('custom-base-input');
-        const detectedBaseValue = document.querySelector('.detected-base-value');
-        const applyDetectedBaseBtn = document.querySelector('.apply-detected-base-btn');
-        const clearBaseBtn = document.querySelector('.clear-base-btn');
+        const clearBaseBtn = document.querySelector('.route-toolbar .clear-base-btn');
 
-        let currentCustomBase = ''; // 当前用户输入的base
+        let currentCustomBase = ''; // 当前选中的base
+        const storageKey = `${hostname}_custom_base`;
+        const baseListKey = `${hostname}_base_list`; // 存储用户添加的base列表
 
-        if (shouldShowBaseInput && routeBaseInputContainer && customBaseInput) {
-            routeBaseInputContainer.style.display = 'flex';
+        // 更新数量显示
+        function updateBaseCount() {
+            if (!baseCount || !baseSelect) return;
+            const count = baseSelect.options.length;
+            baseCount.textContent = `+${count}`;
+        }
+
+        // 初始化下拉选择框
+        function initBaseSelect() {
+            if (!baseSelect) return;
             
-            // 显示检测到的base
-            if (detectedBaseValue) {
-                detectedBaseValue.textContent = cleanDetectedBase;
-            }
-
-            // ✅ 从 storage读取该域名的自定义base
-            const storageKey = `${hostname}_custom_base`;
-            chrome.storage.local.get([storageKey], (result) => {
+            // 从storage读取用户添加的base列表和当前选中值
+            chrome.storage.local.get([baseListKey, storageKey], (result) => {
+                const savedBaseList = result[baseListKey] || [];
                 currentCustomBase = result[storageKey] || '';
-                customBaseInput.value = currentCustomBase;
+                currentCustomBaseValue = currentCustomBase;
+                
+                // 清空并重新填充选项
+                baseSelect.innerHTML = '';
+                
+                // 首先添加"空置"选项
+                const noneOption = document.createElement('option');
+                noneOption.value = '';
+                noneOption.textContent = '空置';
+                baseSelect.appendChild(noneOption);
+                
+                // 如果检测到base，添加到列表
+                if (cleanDetectedBase && cleanDetectedBase !== '') {
+                    const option = document.createElement('option');
+                    option.value = cleanDetectedBase;
+                    option.textContent = cleanDetectedBase;
+                    baseSelect.appendChild(option);
+                }
+                
+                // 添加用户保存的base（去重）
+                savedBaseList.forEach(base => {
+                    if (base && base !== cleanDetectedBase && base !== '') {
+                        const option = document.createElement('option');
+                        option.value = base;
+                        option.textContent = base;
+                        baseSelect.appendChild(option);
+                    }
+                });
+                
+                // 设置当前选中值（默认选"空置"）
+                baseSelect.value = currentCustomBase;
+                
+                // 更新数量显示
+                updateBaseCount();
                 
                 // 初始渲染
                 renderRoutes(allRoutes);
             });
+        }
 
-            // 应用检测到的base按钮
-            if (applyDetectedBaseBtn) {
-                applyDetectedBaseBtn.onclick = () => {
-                    customBaseInput.value = cleanDetectedBase;
-                    currentCustomBase = cleanDetectedBase;
-                    
-                    // 保存到storage
-                    chrome.storage.local.set({ [storageKey]: currentCustomBase });
-                    
-                    // 重新渲染
-                    renderRoutesWithSearch();
-                };
-            }
+        // 显示工具栏
+        if (routeToolbar) {
+            routeToolbar.style.display = 'flex';
+        }
+        
+        // 初始化下拉框
+        initBaseSelect();
 
-            // 清空按钮
-            if (clearBaseBtn) {
-                clearBaseBtn.onclick = () => {
-                    customBaseInput.value = '';
-                    currentCustomBase = '';
-                    
-                    // 保存到storage
-                    chrome.storage.local.set({ [storageKey]: '' });
-                    
-                    // 重新渲染
-                    renderRoutesWithSearch();
-                };
-            }
-
-            // 输入框实时监听
-            customBaseInput.oninput = (e) => {
-                currentCustomBase = e.target.value.trim();
+        // 下拉选择框变化事件
+        if (baseSelect) {
+            baseSelect.onchange = (e) => {
+                currentCustomBase = e.target.value;
+                currentCustomBaseValue = currentCustomBase;
                 
-                // 保存到storage
+                // 保存当前选中值
                 chrome.storage.local.set({ [storageKey]: currentCustomBase });
                 
-                // 重新渲染（考虑搜索框内容）
+                // 重新渲染
                 renderRoutesWithSearch();
             };
-        } else {
-            // 没有检测到base，直接渲染标准路径
-            renderRoutes(allRoutes);
+        }
+
+        // 输入框实时应用
+        if (customBaseInput) {
+            customBaseInput.oninput = (e) => {
+                const newBase = e.target.value.trim();
+                if (!newBase) {
+                    // 空值时使用下拉框的值
+                    currentCustomBase = baseSelect ? baseSelect.value : '';
+                } else {
+                    // 确保以/开头
+                    currentCustomBase = newBase.startsWith('/') ? newBase : '/' + newBase;
+                }
+                currentCustomBaseValue = currentCustomBase;
+                
+                // 重新渲染
+                renderRoutesWithSearch();
+            };
+            
+            // 回车键保存到列表
+            customBaseInput.onkeypress = (e) => {
+                if (e.key === 'Enter') {
+                    const newBase = customBaseInput.value.trim();
+                    if (!newBase) return;
+                    
+                    const cleanBase = newBase.startsWith('/') ? newBase : '/' + newBase;
+                    
+                    // 检查是否已存在
+                    const exists = Array.from(baseSelect.options).some(opt => opt.value === cleanBase);
+                    if (!exists) {
+                        // 添加新选项
+                        const option = document.createElement('option');
+                        option.value = cleanBase;
+                        option.textContent = cleanBase;
+                        baseSelect.appendChild(option);
+                        
+                        // 保存到storage
+                        chrome.storage.local.get([baseListKey], (result) => {
+                            const baseList = result[baseListKey] || [];
+                            if (!baseList.includes(cleanBase)) {
+                                baseList.push(cleanBase);
+                                chrome.storage.local.set({ [baseListKey]: baseList });
+                            }
+                        });
+                        
+                        // 更新数量
+                        updateBaseCount();
+                    }
+                    
+                    // 选中该选项
+                    baseSelect.value = cleanBase;
+                    currentCustomBase = cleanBase;
+                    currentCustomBaseValue = currentCustomBase;
+                    chrome.storage.local.set({ [storageKey]: currentCustomBase });
+                    
+                    // 清空输入框
+                    customBaseInput.value = '';
+                    renderRoutesWithSearch();
+                }
+            };
+        }
+
+        // 清空按钮 - 清空输入框，选中"空置"
+        if (clearBaseBtn) {
+            clearBaseBtn.onclick = () => {
+                // 清空输入框
+                if (customBaseInput) customBaseInput.value = '';
+                
+                // 选中"空置"
+                baseSelect.value = '';
+                currentCustomBase = '';
+                currentCustomBaseValue = '';
+                
+                // 保存到storage
+                chrome.storage.local.set({ [storageKey]: '' });
+                
+                // 重新渲染
+                renderRoutesWithSearch();
+            };
         }
 
         // ✅ 渲染路由列表（考虑搜索框）的辅助函数
         function renderRoutesWithSearch() {
-            const searchTerm = vueRouteSearchInput.value.toLowerCase().trim();
+            const searchInputEl = document.getElementById('vue-route-search-input');
+            const searchTerm = searchInputEl ? searchInputEl.value.toLowerCase().trim() : '';
             if (searchTerm) {
                 const filteredRoutes = allRoutes.filter(route => {
                     const path = route.path.toLowerCase();
                     const name = (route.name || '').toLowerCase();
-                    return path.includes(searchTerm) || name.includes(searchTerm);
+                    const fullUrl = (baseUrl + normalizePath(route.path)).toLowerCase();
+                    return path.includes(searchTerm) || name.includes(searchTerm) || fullUrl.includes(searchTerm);
                 });
                 renderRoutes(filteredRoutes);
             } else {
@@ -2507,7 +2412,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // 仅当开启了Get_Vue_0或Get_Vue_1脚本且成功获取到路由数据时才执行
             // 🔧 如果用户正在搜索，则不执行跳转
             const hasVueScript = enabledScripts.includes('Get_Vue_0') || enabledScripts.includes('Get_Vue_1');
-            const isSearching = vueRouteSearchInput && vueRouteSearchInput.value.trim() !== '';
+            const searchInputEl = document.getElementById('vue-route-search-input');
+            const isSearching = searchInputEl && searchInputEl.value.trim() !== '';
             
             // 🔧 仅在首次显示Vue路由数据时执行跳转
             if (isFirstVueDataDisplay && hasVueScript && vueRouterInfo && vueRouterInfo.routes && vueRouterInfo.routes.length > 0 && !isSearching) {
@@ -2528,13 +2434,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                     block: 'center'
                                 });
                                 
-                                // 🆕 添加闪烁动画类，闪烁两次
+                                // 🆕 添加高亮动画类（柔和淡出效果）
                                 targetRouteItem.classList.add('highlight-last-opened');
                                 
-                                // 动画完成后移除类（1秒 * 2次 = 2秒）
+                                // 动画完成后移除类（1.5秒淡出）
                                 setTimeout(() => {
                                     targetRouteItem.classList.remove('highlight-last-opened');
-                                }, 2000);
+                                }, 1500);
                             }, 100);
                         }
                     }
@@ -2544,17 +2450,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // 搜索功能
-        vueRouteSearchInput.value = ''; // 清空搜索框
-        vueRouteSearchInput.oninput = (e) => {
-            const searchTerm = e.target.value.toLowerCase();
+        // 🆕 搜索功能已移至外部全局事件监听
+        // 如果搜索框已有内容，立即执行搜索过滤
+        const searchInputEl = document.getElementById('vue-route-search-input');
+        if (searchInputEl && searchInputEl.value.trim()) {
+            const searchTerm = searchInputEl.value.toLowerCase().trim();
             const filteredRoutes = allRoutes.filter(route => {
                 const path = route.path.toLowerCase();
                 const name = (route.name || '').toLowerCase();
                 return path.includes(searchTerm) || name.includes(searchTerm);
             });
             renderRoutes(filteredRoutes);
-        };
+        }
 
         // 批量复制功能 - 根据当前用户输入的base复制
         copyAllPathsBtn.onclick = () => {
@@ -2685,66 +2592,19 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStorage(enabledScripts);
     }
 
-    // 🆕 脚本组合检测函数：将独立脚本合并为组合脚本
-    function combineCombinableScripts(scriptIds) {
-        const combined = [...scriptIds];
-        
-        // 检测是否同时存在 Hook_SMcrypto 和 Hook_JSEncrypt
-        const hasSM = combined.includes('Hook_SMcrypto');
-        const hasJSE = combined.includes('Hook_JSEncrypt');
-        const hasCombined = combined.includes('Hook_JSEncrypt_SMcrypto');
-        
-        if (hasSM && hasJSE && !hasCombined) {
-            // 同时存在两个独立脚本，且不存在合并脚本
-            // 移除两个独立脚本
-            const smIndex = combined.indexOf('Hook_SMcrypto');
-            const jseIndex = combined.indexOf('Hook_JSEncrypt');
-            
-            // 从后往前删除，避免索引变化
-            if (smIndex > jseIndex) {
-                combined.splice(smIndex, 1);
-                combined.splice(jseIndex, 1);
-            } else {
-                combined.splice(jseIndex, 1);
-                combined.splice(smIndex, 1);
-            }
-            
-            // 添加合并脚本
-            combined.push('Hook_JSEncrypt_SMcrypto');
-        } else if (!hasSM && !hasJSE && hasCombined) {
-            // 两个独立脚本都不存在了，移除合并脚本
-            const combinedIndex = combined.indexOf('Hook_JSEncrypt_SMcrypto');
-            combined.splice(combinedIndex, 1);
-        } else if ((hasSM && !hasJSE) || (!hasSM && hasJSE)) {
-            // 只有一个独立脚本存在，需要移除合并脚本（如果有）
-            const combinedIndex = combined.indexOf('Hook_JSEncrypt_SMcrypto');
-            if (combinedIndex !== -1) {
-                combined.splice(combinedIndex, 1);
-            }
-        }
-        
-        return combined;
-    }
-
     // 🆕 统一的存储更新函数（支持全局模式）
     function updateStorage(enabled) {
-        // 🆕 检测并合并脚本组合
-        const scriptsToStore = combineCombinableScripts(enabled);
-
-        // 更新合并Hooks数据（传入展开后的完整列表）
-        updateMergedHooks(enabled);
-        
         if (isGlobalMode) {
             // 全局模式：更新全局脚本列表
-            globalEnabledScripts = [...scriptsToStore];
+            globalEnabledScripts = [...enabled];
             chrome.storage.local.set({
-                [GLOBAL_SCRIPTS_KEY]: scriptsToStore
+                [GLOBAL_SCRIPTS_KEY]: globalEnabledScripts
             }, () => {
                 // 通知后台更新脚本注册（全局模式）
                 chrome.runtime.sendMessage({
                     type: 'update_scripts_registration',
                     hostname: '*',
-                    enabledScripts: scriptsToStore,
+                    enabledScripts: enabled,
                     isGlobalMode: true
                 });
 
@@ -2752,23 +2612,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 chrome.tabs.sendMessage(currentTab_obj.id, {
                     type: 'scripts_updated',
                     hostname: hostname,
-                    enabledScripts: scriptsToStore
+                    enabledScripts: enabled
                 });
 
                 // 更新本地状态并重新渲染
-                enabledScripts = enabled; // 保持UI状态为展开的
+                enabledScripts = enabled;
                 renderCurrentTab();
             });
         } else {
             // 标准模式：更新当前域名配置
             chrome.storage.local.set({
-                [hostname]: scriptsToStore
+                [hostname]: enabled
             }, () => {
                 // 通知后台更新脚本注册（标准模式）
                 chrome.runtime.sendMessage({
                     type: 'update_scripts_registration',
                     hostname: hostname,
-                    enabledScripts: scriptsToStore,
+                    enabledScripts: enabled,
                     isGlobalMode: false
                 });
 
@@ -2776,13 +2636,550 @@ document.addEventListener('DOMContentLoaded', () => {
                 chrome.tabs.sendMessage(currentTab_obj.id, {
                     type: 'scripts_updated',
                     hostname: hostname,
-                    enabledScripts: scriptsToStore
+                    enabledScripts: enabled
                 });
 
                 // 更新本地状态并重新渲染
-                enabledScripts = enabled; // 保持UI状态为展开的
+                enabledScripts = enabled;
                 renderCurrentTab();
             });
         }
     }
+    
+    // ========== 全局请求头功能 ==========
+    
+    // 生成唯一ID
+    function generateHeaderId() {
+        return `hdr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+    
+    // 初始化Headers面板
+    function initHeadersPanel() {
+        loadHeadersData().then(() => {
+            renderHeadersGroups();
+            if (headersGroups.length > 0 && !currentHeadersGroupId) {
+                currentHeadersGroupId = headersGroups[0].id;
+            }
+            renderHeadersItems();
+            bindHeadersEvents();
+        });
+    }
+    
+    // 加载Headers数据
+    function loadHeadersData() {
+        return new Promise((resolve) => {
+            chrome.storage.local.get([HEADERS_GROUPS_KEY, HEADERS_DATA_KEY, 'current_headers_group'], (result) => {
+                headersGroups = result[HEADERS_GROUPS_KEY] || [];
+                headersData = result[HEADERS_DATA_KEY] || {};
+                // 恢复上次选中的组
+                const savedGroupId = result['current_headers_group'];
+                if (savedGroupId && headersGroups.find(g => g.id === savedGroupId)) {
+                    currentHeadersGroupId = savedGroupId;
+                } else if (headersGroups.length > 0) {
+                    currentHeadersGroupId = headersGroups[0].id;
+                }
+                resolve();
+            });
+        });
+    }
+    
+    // 保存Headers数据
+    function saveHeadersData() {
+        chrome.storage.local.set({
+            [HEADERS_GROUPS_KEY]: headersGroups,
+            [HEADERS_DATA_KEY]: headersData
+        }, () => {
+            // 通知background更新请求头注入
+            notifyHeadersUpdate();
+        });
+    }
+    
+    // 通知background更新请求头（只使用当前选中组的请求头）
+    function notifyHeadersUpdate() {
+        // 只收集当前选中组的启用请求头
+        const enabledHeaders = [];
+        
+        if (currentHeadersGroupId) {
+            const items = headersData[currentHeadersGroupId] || [];
+            console.log('[AntiDebug] 当前组数据:', JSON.stringify(items));
+            
+            items.forEach(item => {
+                if (item.enabled && item.name && item.name.trim()) {
+                    console.log('[AntiDebug] 添加请求头:', item.name, '=', item.value);
+                    enabledHeaders.push({
+                        name: item.name.trim(),
+                        value: item.value || ''
+                    });
+                }
+            });
+        }
+        
+        console.log('[AntiDebug] 发送到 background 的请求头:', JSON.stringify(enabledHeaders));
+        
+        chrome.runtime.sendMessage({
+            type: 'UPDATE_GLOBAL_HEADERS',
+            headers: enabledHeaders,
+            groupId: currentHeadersGroupId
+        });
+    }
+    
+    // 渲染标签组列表（标签式布局）
+    function renderHeadersGroups() {
+        const container = document.getElementById('headers-tabs-list');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (headersGroups.length === 0) {
+            // 没有标签组时不显示任何内容
+            return;
+        }
+        
+        headersGroups.forEach(group => {
+            const items = headersData[group.id] || [];
+            const enabledCount = items.filter(i => i.enabled).length;
+            const totalCount = items.length;
+            const isActive = currentHeadersGroupId === group.id;
+            
+            const tabEl = document.createElement('div');
+            tabEl.className = `headers-tab-item ${isActive ? 'active' : 'inactive'}`;
+            tabEl.dataset.groupId = group.id;
+            
+            // 显示名称和启用数量/总数量
+            tabEl.innerHTML = `
+                <span class="tab-name">${group.name}</span>
+                <span class="tab-count ${enabledCount > 0 ? 'has-enabled' : ''}">${enabledCount}/${totalCount}</span>
+                <button class="tab-delete" title="删除">×</button>
+            `;
+            
+            // 点击选中标签组
+            tabEl.addEventListener('click', (e) => {
+                if (e.target.classList.contains('tab-delete')) return;
+                if (e.target.classList.contains('tab-name-input')) return;
+                currentHeadersGroupId = group.id;
+                renderHeadersGroups();
+                renderHeadersItems();
+                // 保存当前选中的组
+                chrome.storage.local.set({ 'current_headers_group': group.id });
+            });
+            
+            // 双击编辑名称
+            const nameEl = tabEl.querySelector('.tab-name');
+            nameEl.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                startEditGroupName(group.id, tabEl, nameEl);
+            });
+            
+            // 删除按钮
+            const deleteBtn = tabEl.querySelector('.tab-delete');
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteHeadersGroup(group.id);
+            });
+            
+            container.appendChild(tabEl);
+        });
+    }
+    
+    // 开始编辑标签组名称
+    function startEditGroupName(groupId, tabEl, nameEl) {
+        const group = headersGroups.find(g => g.id === groupId);
+        if (!group) return;
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'tab-name-input';
+        input.value = group.name;
+        
+        nameEl.replaceWith(input);
+        input.focus();
+        input.select();
+        
+        const finishEdit = () => {
+            const newName = input.value.trim() || '未命名';
+            group.name = newName;
+            saveHeadersData();
+            renderHeadersGroups();
+        };
+        
+        input.addEventListener('blur', finishEdit);
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                input.blur();
+            }
+        });
+        input.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+    
+    // 添加标签组
+    function addHeadersGroup() {
+        // 使用更好的默认命名：配置A、配置B、配置C...
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        let nextIndex = 0;
+        const usedNames = headersGroups.map(g => g.name);
+        
+        // 找到下一个可用的字母
+        while (nextIndex < letters.length && usedNames.includes(`配置${letters[nextIndex]}`)) {
+            nextIndex++;
+        }
+        
+        const name = nextIndex < letters.length ? `配置${letters[nextIndex]}` : `配置${headersGroups.length + 1}`;
+        
+        const newGroup = {
+            id: generateHeaderId(),
+            name: name
+        };
+        headersGroups.push(newGroup);
+        headersData[newGroup.id] = [];
+        currentHeadersGroupId = newGroup.id;
+        saveHeadersData();
+        renderHeadersGroups();
+        renderHeadersItems();
+    }
+    
+    // 删除标签组
+    function deleteHeadersGroup(groupId) {
+        headersGroups = headersGroups.filter(g => g.id !== groupId);
+        delete headersData[groupId];
+        
+        if (currentHeadersGroupId === groupId) {
+            currentHeadersGroupId = headersGroups.length > 0 ? headersGroups[0].id : null;
+        }
+        
+        saveHeadersData();
+        renderHeadersGroups();
+        renderHeadersItems();
+    }
+    
+    // UA 下拉框：关闭所有打开的 UA 下拉
+    function closeAllUaDropdowns() {
+        document.querySelectorAll('.ua-dropdown-wrapper[data-open="true"]').forEach(el => {
+            el.dataset.open = 'false';
+            el.style.display = 'none';
+            const list = el.querySelector('.ua-dropdown-list');
+            const search = el.querySelector('.ua-dropdown-search');
+            if (list) list.style.display = 'none';
+            if (search) search.style.display = 'none';
+        });
+    }
+
+    // 渲染请求头列表
+    function renderHeadersItems() {
+        const container = document.getElementById('headers-items-list');
+        const emptyHint = document.getElementById('headers-empty-hint');
+        const titleEl = document.getElementById('current-group-name');
+        const addBtn = document.getElementById('add-header-btn');
+        
+        if (!container) return;
+        
+        // 更新标题
+        if (titleEl) {
+            const group = headersGroups.find(g => g.id === currentHeadersGroupId);
+            titleEl.textContent = group ? group.name : '请求头';
+        }
+        
+        // 如果没有标签组
+        if (headersGroups.length === 0) {
+            container.style.display = 'none';
+            if (addBtn) addBtn.style.display = 'none';
+            if (emptyHint) {
+                emptyHint.style.display = 'flex';
+                emptyHint.querySelector('p').textContent = '点击上方 + 添加标签组';
+            }
+            return;
+        }
+        
+        // 如果没有选中的标签组
+        if (!currentHeadersGroupId) {
+            container.style.display = 'none';
+            if (addBtn) addBtn.style.display = 'none';
+            if (emptyHint) {
+                emptyHint.style.display = 'flex';
+                emptyHint.querySelector('p').textContent = '选择一个标签组';
+            }
+            return;
+        }
+        
+        if (addBtn) addBtn.style.display = 'flex';
+        
+        const items = headersData[currentHeadersGroupId] || [];
+        
+        if (items.length === 0) {
+            container.style.display = 'none';
+            if (emptyHint) {
+                emptyHint.style.display = 'flex';
+                emptyHint.querySelector('p').textContent = '点击「添加请求头」按钮添加';
+            }
+            return;
+        }
+        
+        container.style.display = 'flex';
+        if (emptyHint) emptyHint.style.display = 'none';
+
+        // 清理之前移到 body 下的孤儿 dropdown
+        document.querySelectorAll('body > .ua-dropdown-wrapper').forEach(el => el.remove());
+
+        container.innerHTML = '';
+        
+        items.forEach((item, index) => {
+            const itemEl = document.createElement('div');
+            itemEl.className = `header-item ${item.enabled ? 'enabled' : ''}`;
+            itemEl.dataset.itemId = item.id;
+
+            itemEl.innerHTML = `
+                <input type="checkbox" class="header-checkbox" ${item.enabled ? 'checked' : ''}>
+                <div class="header-inputs">
+                    <input type="text" class="header-name-input" placeholder="Name" value="${item.name || ''}" list="header-suggestions-${item.id}" autocomplete="off">
+                    <datalist id="header-suggestions-${item.id}"></datalist>
+                    <input type="text" class="header-value-input" placeholder="Value" value="${item.value || ''}" ${item.name === 'User-Agent' ? 'data-ua-header="true"' : ''}>
+                    <button class="ua-select-btn" title="选择 UA">UA</button>
+                </div>
+                <div class="ua-dropdown-wrapper">
+                    <input type="text" class="ua-dropdown-search" placeholder="搜索 UA..." style="display:none;">
+                    <div class="ua-dropdown-list" style="display:none;"></div>
+                </div>
+                <button class="header-delete-btn">×</button>
+            `;
+            
+            // 绑定事件
+            const checkbox = itemEl.querySelector('.header-checkbox');
+            const nameInput = itemEl.querySelector('.header-name-input');
+            const valueInput = itemEl.querySelector('.header-value-input');
+            const deleteBtn = itemEl.querySelector('.header-delete-btn');
+            
+            checkbox.addEventListener('change', (e) => {
+                item.enabled = e.target.checked;
+                itemEl.classList.toggle('enabled', item.enabled);
+                saveHeadersData();
+                renderHeadersGroups(); // 更新指示灯
+            });
+            
+            // 自动补全逻辑
+            const datalist = itemEl.querySelector(`#header-suggestions-${item.id}`);
+            
+            function updateSuggestions(inputValue) {
+                if (!datalist) return;
+                datalist.innerHTML = '';
+                
+                if (!inputValue || inputValue.length === 0) return;
+                
+                const lowerInput = inputValue.toLowerCase();
+                const matches = COMMON_HEADERS.filter(h => 
+                    h.toLowerCase().includes(lowerInput)
+                );
+                
+                matches.forEach(match => {
+                    const option = document.createElement('option');
+                    option.value = match;
+                    datalist.appendChild(option);
+                });
+            }
+            
+            nameInput.addEventListener('input', (e) => {
+                item.name = e.target.value;
+                updateSuggestions(e.target.value);
+            });
+            
+            nameInput.addEventListener('focus', (e) => {
+                updateSuggestions(e.target.value);
+            });
+            
+            nameInput.addEventListener('blur', () => {
+                saveHeadersData();
+            });
+            
+            valueInput.addEventListener('input', (e) => {
+                item.value = e.target.value;
+            });
+            
+            valueInput.addEventListener('blur', () => {
+                saveHeadersData();
+            });
+            
+            deleteBtn.addEventListener('click', () => {
+                deleteHeaderItem(item.id);
+            });
+
+            // UA 下拉选择器逻辑
+            const uaBtn = itemEl.querySelector('.ua-select-btn');
+            const uaDropdownWrapper = itemEl.querySelector('.ua-dropdown-wrapper');
+            const uaSearchInput = itemEl.querySelector('.ua-dropdown-search');
+            const uaDropdownList = itemEl.querySelector('.ua-dropdown-list');
+
+            function openUaDropdown() {
+                console.log('[UA Debug] openUaDropdown called, UA_LIST length:', window.UA_LIST ? window.UA_LIST.length : 'undefined');
+                if (!uaDropdownWrapper || !uaBtn) return;
+                const isCurrentlyOpen = uaDropdownWrapper.dataset.open === 'true';
+                closeAllUaDropdowns();
+                if (isCurrentlyOpen) return;
+                // 移到 body 下，避免任何父容器 overflow 裁剪
+                if (uaDropdownWrapper.parentElement !== document.body) {
+                    document.body.appendChild(uaDropdownWrapper);
+                }
+                uaDropdownWrapper.style.display = 'block';
+                // 计算位置和可用高度，确保不超出 popup 视口
+                const rect = uaBtn.getBoundingClientRect();
+                const dropdownWidth = uaDropdownWrapper.offsetWidth || 400;
+                const winW = window.innerWidth;
+                const winH = window.innerHeight;
+                let left = rect.left - dropdownWidth + rect.width;
+                let top = rect.bottom + 4;
+                // 确保不超出左边界
+                if (left < 8) left = 8;
+                // 右侧超出时贴右
+                if (left + dropdownWidth > winW - 8) {
+                    left = winW - dropdownWidth - 8;
+                }
+                // 计算下方/上方可用高度，取较大的方向
+                const spaceBelow = winH - rect.bottom - 12;
+                const spaceAbove = rect.top - 12;
+                let maxListHeight;
+                if (spaceBelow >= spaceAbove) {
+                    // 向下展开
+                    top = rect.bottom + 4;
+                    maxListHeight = Math.min(340, spaceBelow - 50);
+                } else {
+                    // 向上展开
+                    top = Math.max(8, rect.top - spaceAbove - 4);
+                    maxListHeight = Math.min(340, spaceAbove - 50);
+                }
+                if (maxListHeight < 100) maxListHeight = 100;
+                uaDropdownWrapper.style.left = left + 'px';
+                uaDropdownWrapper.style.top = top + 'px';
+                uaDropdownWrapper.style.maxHeight = (maxListHeight + 50) + 'px';
+                if (uaDropdownList) uaDropdownList.style.maxHeight = maxListHeight + 'px';
+                uaDropdownWrapper.dataset.open = 'true';
+                uaDropdownList.style.display = 'block';
+                if (uaSearchInput) uaSearchInput.style.display = 'block';
+                renderUaOptionsForItem(uaDropdownList, '');
+                if (uaSearchInput) uaSearchInput.focus();
+            }
+
+            function renderUaOptionsForItem(listEl, filter) {
+                const uaList = window.UA_LIST || [];
+                console.log('[UA Debug] renderUaOptionsForItem, listEl:', !!listEl, 'UA count:', uaList.length, 'filter:', filter);
+                if (!listEl || uaList.length === 0) return;
+                listEl.innerHTML = '';
+                const lowerFilter = (filter || '').toLowerCase();
+                const filtered = uaList.filter(ua => {
+                    return ua.label.toLowerCase().includes(lowerFilter) ||
+                           ua.value.toLowerCase().includes(lowerFilter);
+                });
+                if (filtered.length === 0) {
+                    listEl.innerHTML = '<div class="ua-dropdown-empty">未找到匹配的 UA</div>';
+                    return;
+                }
+                // 用 DocumentFragment 批量插入，避免 1000 次回流
+                const frag = document.createDocumentFragment();
+                filtered.forEach(ua => {
+                    const el = document.createElement('div');
+                    el.className = 'ua-dropdown-item';
+                    el.dataset.uaValue = ua.value;
+                    el.innerHTML = `<span class="ua-label">${ua.label}</span><span class="ua-value">${ua.value.slice(0, 60)}${ua.value.length > 60 ? '...' : ''}</span>`;
+                    frag.appendChild(el);
+                });
+                listEl.appendChild(frag);
+                // 事件委托，替代逐个 addEventListener
+                listEl.onclick = (e) => {
+                    const target = e.target.closest('.ua-dropdown-item');
+                    if (!target) return;
+                    const uaValue = target.dataset.uaValue;
+                    if (!uaValue) return;
+                    item.name = 'User-Agent';
+                    item.value = uaValue;
+                    nameInput.value = 'User-Agent';
+                    valueInput.value = uaValue;
+                    valueInput.dataset.uaHeader = 'true';
+                    const btn = itemEl.querySelector('.ua-select-btn');
+                    if (btn) btn.style.display = 'flex';
+                    saveHeadersData();
+                    closeAllUaDropdowns();
+                };
+            }
+
+            if (uaBtn) {
+                uaBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openUaDropdown();
+                });
+            }
+
+            if (uaSearchInput) {
+                uaSearchInput.addEventListener('input', (e) => {
+                    renderUaOptionsForItem(uaDropdownList, e.target.value);
+                });
+            }
+
+            container.appendChild(itemEl);
+        });
+    }
+    
+    // 添加请求头
+    function addHeaderItem() {
+        if (!currentHeadersGroupId) {
+            showToast('请先选择或创建标签组');
+            return;
+        }
+        
+        if (!headersData[currentHeadersGroupId]) {
+            headersData[currentHeadersGroupId] = [];
+        }
+        
+        const newItem = {
+            id: generateHeaderId(),
+            name: '',
+            value: '',
+            enabled: true
+        };
+        
+        headersData[currentHeadersGroupId].push(newItem);
+        saveHeadersData();
+        renderHeadersItems();
+        renderHeadersGroups();
+        
+        // 自动聚焦到新添加的输入框
+        setTimeout(() => {
+            const container = document.getElementById('headers-items-list');
+            const lastItem = container.lastElementChild;
+            if (lastItem) {
+                const nameInput = lastItem.querySelector('.header-name-input');
+                if (nameInput) nameInput.focus();
+            }
+        }, 50);
+    }
+    
+    // 删除请求头
+    function deleteHeaderItem(itemId) {
+        if (!currentHeadersGroupId) return;
+
+        headersData[currentHeadersGroupId] = (headersData[currentHeadersGroupId] || []).filter(i => i.id !== itemId);
+        saveHeadersData();
+        renderHeadersItems();
+        renderHeadersGroups();
+    }
+
+    // 点击外部关闭所有 UA 下拉框
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.ua-dropdown-wrapper') && !e.target.closest('.ua-select-btn')) {
+            closeAllUaDropdowns();
+        }
+    });
+
+    // 绑定Headers按钮事件
+    function bindHeadersEvents() {
+        const addGroupBtn = document.getElementById('add-group-btn');
+        const addHeaderBtn = document.getElementById('add-header-btn');
+        
+        if (addGroupBtn) {
+            addGroupBtn.onclick = addHeadersGroup;
+        }
+        
+        if (addHeaderBtn) {
+            addHeaderBtn.onclick = addHeaderItem;
+        }
+    }
+    
+    // ========== 全局请求头功能结束 ==========
 });

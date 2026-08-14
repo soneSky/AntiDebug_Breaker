@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
@@ -9,87 +9,107 @@
 </head>
 
 <body>
-    <div class="container">
-        <header>
-            <a href="https://antidebug-breaker.com/" target="_blank" class="doc-link">使用文档：AntiDebug-Breaker.com</a>
-            <div class="title-container">
-                <!-- 左上角辅助配置按钮 -->
-                <div class="aux-config-wrapper">
-                    <button class="aux-config-btn" id="aux-config-btn" title="辅助配置">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="4" y1="21" x2="4" y2="14"></line>
-                            <line x1="4" y1="10" x2="4" y2="3"></line>
-                            <line x1="12" y1="21" x2="12" y2="12"></line>
-                            <line x1="12" y1="8" x2="12" y2="3"></line>
-                            <line x1="20" y1="21" x2="20" y2="16"></line>
-                            <line x1="20" y1="12" x2="20" y2="3"></line>
-                            <line x1="1" y1="14" x2="7" y2="14"></line>
-                            <line x1="9" y1="8" x2="15" y2="8"></line>
-                            <line x1="17" y1="16" x2="23" y2="16"></line>
-                        </svg>
-                    </button>
-                    <!-- 弹出配置面板 -->
-                    <div class="aux-config-panel" id="aux-config-panel">
-                        <div class="aux-config-panel-arrow"></div>
-                        <!-- 反反Hook检测开关 -->
-                        <div class="antiantiHook-switch-container">
-                            <span class="antiantiHook-text">反Hook检测</span>
-                            <label class="mode-switch">
-                                <input type="checkbox" id="antiantiHook-toggle">
-                                <span class="mode-slider"></span>
-                            </label>
-                            <div class="antiantiHook-tooltip">
-                                开启反Hook检测功能后，可以反制一些常见的Hook检测手段。例如如果打开某个脚本后并未实现功能就可以尝试开启本脚本。<br><br>
-                                <strong>注意：</strong>本脚本目前尚未成熟，可能存在一些未知的bug，请谨慎使用。
-                            </div>
-                        </div>
-                        <!-- 全局/标准模式切换开关 -->
-                        <div class="mode-switch-container">
-                            <span class="mode-text">标准模式</span>
-                            <label class="mode-switch">
-                                <input type="checkbox" id="global-mode-toggle">
-                                <span class="mode-slider"></span>
-                            </label>
-                            <div class="mode-tooltip">
-                                开启标准模式/全局模式<br><br>
-                                <strong>标准模式：</strong>插件默认模式，当勾选脚本并刷新网站后，脚本仅会注入到当前网站。<br><br>
-                                <strong>全局模式：</strong>当开启全局模式后，勾选的脚本将注入到每个网站中。<br><br>
-                                注：对于通过file://协议或localhost访问的页面，需要完成以下操作后才能注入脚本：<br /><br />1. 开启全局模式<br />2. 打开 chrome://extensions/
-                                <br />3. 找到 AntiDebug_Breaker，点击「详情」 <br />
-                                4. 开启「允许访问文件网址」<br />
-                            </div>
+    <div class="app-container">
+        <!-- 左侧导航栏 -->
+        <aside class="sidebar">
+            <!-- Logo区域 -->
+            <div class="logo-section">
+                <img src="../icons/icon48.png" alt="Logo" class="logo-icon">
+                <div class="logo-text">
+                    <span class="logo-title">AntiDebug</span>
+                    <span class="logo-subtitle">Breaker</span>
+                </div>
+            </div>
+
+            <!-- 导航菜单 -->
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="antidebug">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <span>AntiDebug</span>
+                </button>
+                <button class="nav-item" data-tab="hook">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline>
+                        <polyline points="7.5 19.79 7.5 14.6 3 12"></polyline>
+                        <polyline points="21 12 16.5 14.6 16.5 19.79"></polyline>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    <span>Hook</span>
+                </button>
+                <button class="nav-item" data-tab="vue">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                        <polyline points="2 17 12 22 22 17"></polyline>
+                        <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                    <span>Vue</span>
+                </button>
+                <button class="nav-item" data-tab="headers">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 6h16M4 12h16M4 18h12"></path>
+                    </svg>
+                    <span>Headers</span>
+                </button>
+                <button class="nav-item" data-tab="mcp">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                    <span>MCP</span>
+                    <div class="mcp-indicator-dot" id="mcp-indicator"></div>
+                </button>
+            </nav>
+
+            <!-- 底部区域 -->
+            <div class="sidebar-footer">
+                <a href="https://github.com/0xsdeo/AntiDebug_Breaker" target="_blank" class="github-link">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C5.374 0 0 5.373 0 12C0 17.302 3.438 21.8 8.207 23.387C8.806 23.498 9 23.126 9 22.81V20.576C5.662 21.302 4.967 19.16 4.967 19.16C4.421 17.773 3.634 17.404 3.634 17.404C2.545 16.659 3.717 16.675 3.717 16.675C4.922 16.759 5.556 17.912 5.556 17.912C6.626 19.746 8.363 19.216 9.048 18.909C9.155 18.134 9.466 17.604 9.81 17.305C7.145 17.001 4.343 15.971 4.343 11.374C4.343 10.063 4.812 8.993 5.579 8.153C5.455 7.85 5.044 6.628 5.696 4.977C5.696 4.977 6.704 4.655 8.997 6.207C9.954 5.941 10.98 5.808 12 5.803C13.02 5.808 14.047 5.941 15.006 6.207C17.297 4.655 18.303 4.977 18.303 4.977C18.956 6.629 18.545 7.851 18.421 8.153C19.191 8.993 19.656 10.064 19.656 11.374C19.656 15.983 16.849 16.998 14.177 17.295C14.607 17.667 15 18.397 15 19.517V22.81C15 23.129 15.192 23.504 15.801 23.386C20.566 21.797 24 17.3 24 12C24 5.373 18.627 0 12 0Z"/>
+                    </svg>
+                </a>
+                <div class="signature">By 0xsdeo</div>
+            </div>
+        </aside>
+
+        <!-- 右侧内容区 -->
+        <main class="main-content">
+            <!-- 顶部工具栏 -->
+            <header class="content-header">
+                <div class="header-left">
+                    <!-- 全局/标准模式切换 -->
+                    <div class="mode-switch-container">
+                        <label class="mode-switch">
+                            <input type="checkbox" id="global-mode-toggle">
+                            <span class="mode-slider"></span>
+                        </label>
+                        <span class="mode-text">标准模式</span>
+                        <div class="mode-tooltip">
+                            开启标准模式/全局模式<br><br>
+                            <strong>标准模式：</strong>插件默认模式，当勾选脚本并刷新网站后，脚本仅会注入到当前网站。<br><br>
+                            <strong>全局模式：</strong>当开启全局模式后，勾选的脚本将注入到每个网站中。<br><br>
+                            注：对于通过file://协议或localhost访问的页面，必须开启全局模式才能注入脚本。
                         </div>
                     </div>
                 </div>
+                <div class="header-right">
+                    <div class="hint-text">页面刷新后更改生效</div>
+                </div>
+            </header>
 
-                <h1>AntiDebug</h1>
-                <div class="breaker">Breaker</div>
-                <a href="https://github.com/0xsdeo/AntiDebug_Breaker" target="_blank" class="github-link">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M12 0C5.374 0 0 5.373 0 12C0 17.302 3.438 21.8 8.207 23.387C8.806 23.498 9 23.126 9 22.81V20.576C5.662 21.302 4.967 19.16 4.967 19.16C4.421 17.773 3.634 17.404 3.634 17.404C2.545 16.659 3.717 16.675 3.717 16.675C4.922 16.759 5.556 17.912 5.556 17.912C6.626 19.746 8.363 19.216 9.048 18.909C9.155 18.134 9.466 17.604 9.81 17.305C7.145 17.001 4.343 15.971 4.343 11.374C4.343 10.063 4.812 8.993 5.579 8.153C5.455 7.85 5.044 6.628 5.696 4.977C5.696 4.977 6.704 4.655 8.997 6.207C9.954 5.941 10.98 5.808 12 5.803C13.02 5.808 14.047 5.941 15.006 6.207C17.297 4.655 18.303 4.977 18.303 4.977C18.956 6.629 18.545 7.851 18.421 8.153C19.191 8.993 19.656 10.064 19.656 11.374C19.656 15.983 16.849 16.998 14.177 17.295C14.607 17.667 15 18.397 15 19.517V22.81C15 23.129 15.192 23.504 15.801 23.386C20.566 21.797 24 17.3 24 12C24 5.373 18.627 0 12 0Z"
-                            fill="currentColor" />
-                    </svg>
-                </a>
-            </div>
-
-            <!-- 标签切换栏 -->
-            <div class="tabs-container">
-                <button class="tab-btn active" data-tab="antidebug">AntiDebug</button>
-                <button class="tab-btn" data-tab="hook">Hook</button>
-                <button class="tab-btn" data-tab="vue">Vue/React</button>
-            </div>
-
-            <!-- 搜索栏（仅反调试板块显示） -->
-            <div class="search-container">
+            <!-- 搜索栏 -->
+            <div class="search-section">
                 <!-- Hook板块必看说明 -->
                 <div class="hook-notice-container" style="display: none;">
                     <span class="hook-notice-text">必看说明</span>
                     <div class="hook-notice-tooltip">
                         1. 本板块分三类脚本：固定变量脚本、非固定变量脚本、非固定变量+可检索关键字脚本。<br><br>
                         2. 固定变量脚本默认提供一个固定值，修改固定值后需按Enter保存。<br><br>
-                        3.
-                        非固定变量+可检索关键字脚本开启后，未开启检索关键字功能时会输出所有Hook到的内容；如果开启检索关键字并且设置了关键字仅会Hook输出关键字内容；若开启检索关键字功能但并没有设置关键字时将会输出所有Hook到的内容。<br><br>
+                        3. 非固定变量+可检索关键字脚本开启后，未开启检索关键字功能时会输出所有Hook到的内容；如果开启检索关键字并且设置了关键字仅会Hook输出关键字内容；若开启检索关键字功能但并没有设置关键字时将会输出所有Hook到的内容。<br><br>
                         4. 可检索关键字的功能采取的是模糊检索，也就是说只要传进的内容中包含了检索的关键字就能被hook到。<br><br>
                         5. 开启debugger或stack功能后，如果hook到内容将会触发debugger或打印堆栈信息。<br><br>
                         6. 如果下方没有要用的hook脚本可以提issues，也可以联系我(公众号：Spade sec)，我会考虑是否纳入到后续更新进程中。
@@ -100,171 +120,224 @@
                         <button class="hook-filter-btn" id="hook-filter-disabled" data-filter="disabled">未开启</button>
                     </div>
                 </div>
-                <input type="text" id="search-input" placeholder="Search scripts...">
-                <button id="search-btn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div class="search-container">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"></circle>
                         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                     </svg>
-                </button>
-            </div>
-        </header>
-
-        <!-- 反调试板块：3列网格 -->
-        <div class="scripts-grid">
-            <!-- Scripts will be dynamically loaded here -->
-        </div>
-
-        <!-- Hook板块 -->
-        <div class="hook-content" style="display: none;">
-            <!-- Hook板块内容将动态加载 -->
-        </div>
-
-        <!-- Vue/React板块 -->
-        <div class="vue-content" style="display: none;">
-            <!-- 子Tab栏 -->
-            <div class="vue-subtabs-container">
-                <button class="vue-subtab-btn active" data-subtab="vue">Vue</button>
-                <button class="vue-subtab-btn" data-subtab="react">React</button>
-            </div>
-
-            <!-- Vue子板块内容 -->
-            <div class="vue-sub-content">
-                <!-- Vue脚本控制列表 -->
-                <div class="vue-scripts-list">
-                    <!-- Vue scripts will be dynamically loaded here -->
-                </div>
-
-                <!-- Vue Router 数据显示区 -->
-                <div class="vue-router-data">
-                    <!-- 新增：实例标签页（仅多实例时显示） -->
-                    <div class="instance-tabs" style="display: none;">
-                        <div class="instance-tabs-header">
-                            <!-- 动态生成标签按钮 -->
-                        </div>
-                    </div>
-                    <div class="vue-version-display" style="display: none;">
-                        <div class="routes-info"></div>
-                        <div>
-                            <span class="version-label">Vue 版本：</span>
-                            <span class="version-value"></span>
-                        </div>
-                    </div>
-
-                    <!-- 新增：Base路径输入（仅检测到base时显示） -->
-                    <div class="route-base-input-container" style="display: none;">
-                        <div class="detected-base-info">
-                            <span class="detected-base-label">检测到基础路径：</span>
-                            <span class="detected-base-value"></span>
-                            <button class="apply-detected-base-btn">应用</button>
-                        </div>
-                        <div class="custom-base-input-wrapper">
-                            <label class="custom-base-label">自定义基础路径：</label>
-                            <input type="text" id="custom-base-input" class="custom-base-input"
-                                placeholder="留空显示标准路径，如：/admin" />
-                            <button class="clear-base-btn">清空</button>
-                        </div>
-                        <div class="base-hint">💡 输入后实时更新路由列表</div>
-                    </div>
-
-                    <!-- 新增：Vue路由搜索框 -->
-                    <div class="vue-route-search-container" style="display: none;">
-                        <input type="text" id="vue-route-search-input" placeholder="Search routes...">
-                        <button id="vue-route-search-btn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <div class="routes-list-container">
-                        <!-- 路由列表将动态加载 -->
-                    </div>
-
-                    <!-- 新增：批量复制按钮 -->
-                    <div class="routes-actions-footer" style="display: none;">
-                        <button class="footer-btn copy-all-paths-btn">复制所有路径</button>
-                        <button class="footer-btn copy-all-urls-btn">复制所有URL</button>
-                    </div>
+                    <input type="text" id="search-input" placeholder="搜索脚本...">
                 </div>
             </div>
 
-            <!-- React子板块内容 -->
-            <div class="react-sub-content" style="display: none;">
-                <!-- React脚本控制列表 -->
-                <div class="react-scripts-list">
-                    <!-- React scripts will be dynamically loaded here -->
+            <!-- 内容区域 -->
+            <div class="content-body">
+                <!-- 反调试板块 -->
+                <div class="scripts-grid">
+                    <!-- Scripts will be dynamically loaded here -->
                 </div>
 
-                <!-- React Router 数据显示区 -->
-                <div class="react-router-data">
-                    <div class="react-instance-tabs instance-tabs" style="display: none;">
-                        <div class="react-instance-tabs-header instance-tabs-header">
-                            <!-- React instance tabs will be generated here -->
+                <!-- Hook板块 -->
+                <div class="hook-content" style="display: none;">
+                    <!-- Hook板块内容将动态加载 -->
+                </div>
+
+                <!-- Vue板块 -->
+                <div class="vue-content" style="display: none;">
+                    <!-- 顶部标签页导航 + 信息栏 -->
+                    <div class="vue-tabs-bar">
+                        <div class="vue-tabs-row">
+                            <div class="vue-tabs-list">
+                                <button class="vue-tab-item active" data-vue-tab="scripts">
+                                    <span>脚本控制</span>
+                                </button>
+                                <!-- 动态添加的实例标签 -->
+                            </div>
+                            <!-- 路由信息和Vue版本（内联显示） -->
+                            <div class="vue-inline-info" style="display: none;">
+                                <span class="routes-mode-info"></span>
+                                <span class="vue-version-inline">Vue <span class="version-value"></span></span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- 路由信息头 -->
-                    <div class="react-routes-info-bar" style="display: none;">
-                        <span class="react-routes-info"></span>
-                    </div>
-
-                    <!-- 检测到基础路径时显示 -->
-                    <div class="react-route-base-input-container" style="display: none;">
-                        <div class="detected-base-info">
-                            <span class="detected-base-label">检测到基础路径：</span>
-                            <span class="react-detected-base-value"></span>
-                            <button class="react-apply-detected-base-btn">应用</button>
+                    <!-- 脚本控制面板 -->
+                    <div class="vue-panel vue-scripts-panel active" data-panel="scripts">
+                        <div class="vue-scripts-list">
+                            <!-- Vue scripts will be dynamically loaded here -->
                         </div>
-                        <div class="custom-base-input-wrapper">
-                            <label class="custom-base-label">自定义基础路径：</label>
-                            <input type="text" id="react-custom-base-input" class="custom-base-input"
-                                placeholder="留空显示标准路径，如：/admin" />
-                            <button class="react-clear-base-btn">清空</button>
+                    </div>
+
+                    <!-- 路由实例面板（动态生成） -->
+                    <div class="vue-panel vue-routes-panel" data-panel="routes" style="display: none;">
+                        <div class="vue-router-data">
+                            <!-- 工具栏：前置路由 + 搜索框 -->
+                            <div class="route-toolbar" style="display: none;">
+                                <div class="toolbar-left">
+                                    <span class="base-label">前置:</span>
+                                    <select id="base-select" class="base-select">
+                                    </select>
+                                    <span class="base-count"></span>
+                                    <input type="text" id="custom-base-input" class="custom-base-input-sm" placeholder="/list" />
+                                    <button class="base-btn-sm clear-base-btn" title="清空">清</button>
+                                </div>
+                                <div class="toolbar-right">
+                                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    </svg>
+                                    <input type="text" id="vue-route-search-input" class="route-search-input" placeholder="搜索路由..." oninput="window.handleVueRouteSearch && window.handleVueRouteSearch(this.value)">
+                                </div>
+                            </div>
+
+                            <div class="routes-list-container">
+                                <!-- 路由列表将动态加载 -->
+                            </div>
                         </div>
-                        <div class="base-hint">💡 输入后实时更新路由列表</div>
+                        
+                        <!-- 批量复制按钮 - 固定在路由面板底部 -->
+                        <div class="routes-actions-footer">
+                            <button class="footer-btn copy-all-paths-btn">复制所有路径</button>
+                            <button class="footer-btn copy-all-urls-btn">复制所有URL</button>
+                        </div>
                     </div>
 
-                    <!-- 路由搜索框 -->
-                    <div class="react-route-search-container" style="display: none;">
-                        <input type="text" id="react-route-search-input" placeholder="Search routes...">
-                        <button id="react-route-search-btn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                        </button>
+                    <!-- 空状态提示（无路由数据时显示） -->
+                    <div class="vue-empty-hint" style="display: none;">
+                        <div class="empty-icon">📡</div>
+                        <p>开启「获取路由」脚本并刷新页面</p>
                     </div>
+                </div>
 
-                    <!-- 路由列表 -->
-                    <div class="react-routes-list-container"></div>
-
-                    <!-- 批量复制按钮 -->
-                    <div class="react-routes-actions-footer" style="display: none;">
-                        <button class="footer-btn react-copy-all-paths-btn">复制所有路径</button>
-                        <button class="footer-btn react-copy-all-urls-btn">复制所有URL</button>
+                <!-- Headers板块 -->
+                <div class="headers-content" style="display: none;">
+                    <!-- 顶部标签组区域 -->
+                    <div class="headers-tabs-bar">
+                        <div class="headers-tabs-row">
+                            <div class="headers-tabs-list" id="headers-tabs-list">
+                                <!-- 动态生成标签组标签 -->
+                            </div>
+                            <button class="headers-add-group-btn" id="add-group-btn" title="添加标签组">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
+                    
+                    <!-- 请求头内容区域 -->
+                    <div class="headers-panel">
+                        <div class="headers-panel-header">
+                            <span class="headers-panel-title" id="current-group-name">请求头</span>
+                            <button class="headers-add-item-btn" id="add-header-btn" title="添加请求头">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span>添加请求头</span>
+                            </button>
+                        </div>
+                        <div class="headers-items-list" id="headers-items-list">
+                            <!-- 动态生成请求头列表 -->
+                        </div>
+                        <div class="headers-empty-hint" id="headers-empty-hint">
+                            <p>点击上方 + 添加标签组</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MCP板块 -->
+                <div class="mcp-content" style="display: none;">
+                    <div class="mcp-section">
+                        <div class="mcp-header">
+                            <h3>MCP 连接设置</h3>
+                            <div class="mcp-status">
+                                <span id="mcp-status-text">状态：未连接</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mcp-control-card">
+                            <div class="mcp-control-row">
+                                <div class="mcp-control-info">
+                                    <span class="mcp-control-title">启用 MCP</span>
+                                    <span class="mcp-control-desc">开启后可通过 Cursor AI 控制浏览器</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="mcp-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mcp-control-card">
+                            <div class="mcp-control-row">
+                                <div class="mcp-control-info">
+                                    <span class="mcp-control-title">连接端口</span>
+                                    <span class="mcp-control-desc">与 mcp.json 中配置的端口保持一致</span>
+                                </div>
+                                <div class="mcp-port-input-wrapper">
+                                    <input type="number" id="mcp-port-input" class="mcp-port-input" value="9527" min="1024" max="65535" placeholder="9527">
+                                    <button id="mcp-port-save" class="mcp-port-save-btn" title="保存端口">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mcp-control-card">
+                            <div class="mcp-control-row">
+                                <div class="mcp-control-info">
+                                    <span class="mcp-control-title">全局操作模式</span>
+                                    <span class="mcp-control-desc">启用后可通过页面标题匹配操作指定网站</span>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="mcp-global-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mcp-info-card">
+                            <h4>使用说明</h4>
+                            <ol class="mcp-instructions">
+                                <li>在 Cursor 的 mcp.json 中配置 MCP_PORT 环境变量（可选）</li>
+                                <li>上方设置的端口需与 MCP 服务器端口一致（默认: 9527）</li>
+                                <li>打开上方的 "启用 MCP" 开关</li>
+                                <li>在 Cursor 中使用 MCP 工具进行操作</li>
+                            </ol>
+                            <div class="mcp-config-example">
+                                <h5>mcp.json 配置示例：</h5>
+                                <pre class="mcp-config-code">{
+  "mcpServers": {
+    "AntiDebug_Breaker_mcp": {
+      "command": "node",
+      "args": ["/path/to/mcp-server/dist/index.js"],
+      "env": {
+        "MCP_PORT": "9527"
+      }
+    }
+  }
+}</pre>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- 无结果提示 -->
+                <div class="no-results">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <p>未找到匹配的脚本</p>
                 </div>
             </div>
-        </div>
-
-        <div class="no-results">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-            <p>No scripts found matching your search</p>
-        </div>
-
-        <footer>
-            <div class="signature">By 0xsdeo</div>
-            <div class="hint">页面刷新后更改生效</div>
-        </footer>
+        </main>
     </div>
 
     <!-- Toast提示 -->
@@ -272,7 +345,8 @@
         <div class="toast-message">已保存</div>
     </div>
 
-    <script src="popup.js"></script>
+    <script src="ua_data.js"></script>
+                <script src="popup.js"></script>
 </body>
 
 </html>
